@@ -2,7 +2,7 @@ function modeLabel(mode) {
   return mode.charAt(0).toUpperCase() + mode.slice(1);
 }
 
-function WorkspaceCard({ workspace, onDelete, onEdit }) {
+function WorkspaceCard({ workspace, onDelete, onEdit, onOpen }) {
   return (
     <article className="workspace-card">
       <div className="workspace-card-header">
@@ -13,6 +13,9 @@ function WorkspaceCard({ workspace, onDelete, onEdit }) {
           </span>
         </div>
         <div className="workspace-actions">
+          <button onClick={() => onOpen(workspace)} type="button">
+            Open
+          </button>
           <button onClick={() => onEdit(workspace)} type="button">
             Edit
           </button>

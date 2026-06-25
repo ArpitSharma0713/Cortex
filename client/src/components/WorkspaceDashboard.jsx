@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosInstance";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
+import DocumentList from "./DocumentList";
+import UploadButton from "./UploadButton";
 import WorkspaceCard from "./WorkspaceCard";
 
 function WorkspaceDashboard({ accessToken, setAuth }) {
@@ -10,6 +12,8 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null);
+  const [documentRefreshSignal, setDocumentRefreshSignal] = useState(0);
 
   function authHeaders() {
     return {
@@ -25,6 +29,11 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
     }
 
     return false;
+  }
+
+  function clearAuthAndRedirect() {
+    setAuth({ accessToken: "", user: null });
+    navigate("/login");
   }
 
   useEffect(() => {
@@ -117,6 +126,9 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
           (currentWorkspace) => currentWorkspace.id !== workspace.id,
         ),
       );
+      if (selectedWorkspace?.id === workspace.id) {
+        setSelectedWorkspace(null);
+      }
     } catch (requestError) {
       if (!handleUnauthorized(requestError)) {
         setError("Could not delete workspace");
@@ -126,6 +138,34 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
 
   return (
     <>
+      {selectedWorkspace ? (
+        <div className="workspace-detail">
+          <button onClick={() => setSelectedWorkspace(null)} type="button">
+            Back
+          </button>
+          <div className="workspace-toolbar">
+            <div>
+              <h1>{selectedWorkspace.name}</h1>
+              <p>{selectedWorkspace.description || "No description"}</p>
+            </div>
+            <UploadButton
+              accessToken={accessToken}
+              onUnauthorized={clearAuthAndRedirect}
+              onUploaded={() =>
+                setDocumentRefreshSignal((currentSignal) => currentSignal + 1)
+              }
+              workspaceId={selectedWorkspace.id}
+            />
+          </div>
+          <DocumentList
+            accessToken={accessToken}
+            onUnauthorized={clearAuthAndRedirect}
+            refreshSignal={documentRefreshSignal}
+            workspaceId={selectedWorkspace.id}
+          />
+        </div>
+      ) : (
+        <>
       <div className="workspace-toolbar">
         <div>
           <h1>Workspaces</h1>
@@ -147,6 +187,7 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
             key={workspace.id}
             onDelete={handleDelete}
             onEdit={handleEdit}
+            onOpen={setSelectedWorkspace}
             workspace={workspace}
           />
         ))}
@@ -156,6 +197,8 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
         onClose={() => setIsCreateOpen(false)}
         onCreate={handleCreate}
       />
+        </>
+      )}
     </>
   );
 }
