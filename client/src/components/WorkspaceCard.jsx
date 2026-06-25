@@ -1,3 +1,5 @@
+import React from "react";
+
 function modeLabel(mode) {
   return mode.charAt(0).toUpperCase() + mode.slice(1);
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import api from "../api/axiosInstance";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
