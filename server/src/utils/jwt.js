@@ -31,10 +31,9 @@ export function getRefreshTokenExpiresAt() {
   return expiresAt;
 }
 
-export function buildAuthPayload(user, refreshToken) {
+export function buildAuthPayload(user) {
   return {
     accessToken: generateAccessToken(user),
-    refreshToken,
     user: {
       id: user.id,
       email: user.email,
