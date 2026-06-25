@@ -1,13 +1,11 @@
 import { PDFParse } from "pdf-parse";
 
 export async function extractTextFromBuffer(buffer) {
-  const parser = new PDFParse({ data: buffer });
+  const parser = new PDFParse({ data: new Uint8Array(buffer) });
 
   try {
-    const [textResult, infoResult] = await Promise.all([
-      parser.getText(),
-      parser.getInfo(),
-    ]);
+    const textResult = await parser.getText();
+    const infoResult = await parser.getInfo();
 
     return {
       text: textResult.text,
