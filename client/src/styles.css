@@ -28,6 +28,14 @@ button,
   text-decoration: none;
 }
 
+select,
+textarea {
+  border: 1px solid #cfd6e2;
+  border-radius: 6px;
+  font: inherit;
+  padding: 10px 12px;
+}
+
 button:disabled {
   cursor: not-allowed;
   opacity: 0.65;
@@ -70,7 +78,7 @@ button:disabled {
 }
 
 .dashboard-panel {
-  max-width: 720px;
+  max-width: 1040px;
 }
 
 .auth-panel h1,
@@ -119,6 +127,146 @@ pre {
   padding: 16px;
 }
 
+.workspace-toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.workspace-toolbar h1 {
+  margin: 0 0 4px;
+}
+
+.workspace-toolbar p {
+  color: #4c5565;
+  margin: 0;
+}
+
+.workspace-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 20px;
+}
+
+.workspace-card {
+  border: 1px solid #d9dee8;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.workspace-card-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.workspace-card h2 {
+  font-size: 20px;
+  margin: 0 0 8px;
+}
+
+.workspace-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-actions button {
+  padding: 8px 10px;
+}
+
+.danger-button {
+  background: #b91c1c;
+}
+
+.mode-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+
+.mode-general {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.mode-developer {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mode-creative {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.workspace-description {
+  color: #4c5565;
+  margin: 0;
+  min-height: 44px;
+}
+
+.workspace-meta {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.workspace-meta dt {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.workspace-meta dd {
+  margin: 4px 0 0;
+}
+
+.empty-state {
+  border: 1px dashed #aeb7c7;
+  border-radius: 8px;
+  color: #4c5565;
+  margin: 20px 0 0;
+  padding: 24px;
+  text-align: center;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(17, 24, 39, 0.58);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 10;
+}
+
+.modal-panel {
+  background: #ffffff;
+  border-radius: 8px;
+  max-width: 520px;
+  padding: 24px;
+  width: 100%;
+}
+
+.modal-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  margin: 0;
+}
+
 @media (max-width: 520px) {
   .home-actions {
     align-items: flex-start;
@@ -129,5 +277,11 @@ pre {
     align-items: flex-start;
     flex-direction: column;
     gap: 12px;
+  }
+
+  .workspace-card-header,
+  .workspace-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import api from "../api/axiosInstance";
+import WorkspaceDashboard from "../components/WorkspaceDashboard";
 
 function Dashboard({ auth, setAuth }) {
   const navigate = useNavigate();
@@ -84,10 +85,9 @@ function Dashboard({ auth, setAuth }) {
             {isLoggingOut ? "Logging out..." : "Logout"}
           </button>
         </nav>
-        <h1>Dashboard</h1>
         <p className="status-line">{status}</p>
-        {auth.user && (
-          <pre>{JSON.stringify(auth.user, null, 2)}</pre>
+        {auth.user && auth.accessToken && (
+          <WorkspaceDashboard accessToken={auth.accessToken} setAuth={setAuth} />
         )}
       </section>
     </main>
