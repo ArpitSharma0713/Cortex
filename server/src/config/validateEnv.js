@@ -1,4 +1,13 @@
-const requiredEnvVars = ["DATABASE_URL", "NODE_ENV", "CLIENT_URL"];
+const requiredEnvVars = [
+  "DATABASE_URL",
+  "NODE_ENV",
+  "CLIENT_URL",
+  "ACCESS_TOKEN_SECRET",
+  "REFRESH_TOKEN_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_CALLBACK_URL",
+];
 
 export default function validateEnv() {
   const missingEnvVars = requiredEnvVars.filter(
@@ -16,6 +25,14 @@ export default function validateEnv() {
 
     if (!Number.isInteger(port) || port <= 0) {
       throw new Error("PORT must be a positive integer");
+    }
+  }
+
+  if (process.env.REFRESH_TOKEN_EXPIRES_DAYS) {
+    const days = Number(process.env.REFRESH_TOKEN_EXPIRES_DAYS);
+
+    if (!Number.isInteger(days) || days <= 0) {
+      throw new Error("REFRESH_TOKEN_EXPIRES_DAYS must be a positive integer");
     }
   }
 }

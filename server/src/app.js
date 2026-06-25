@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cookieParser from "cookie-parser";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -17,7 +18,9 @@ try {
 }
 
 const { default: healthRoutes } = await import("./routes/health.js");
+const { default: authRoutes } = await import("./routes/auth.js");
 const { testConnection } = await import("./config/db.js");
+const { default: passport } = await import("./config/passport.js");
 
 app.use(helmet());
 app.use(
@@ -28,8 +31,11 @@ app.use(
 );
 app.use(morgan("dev"));
 app.use(express.json());
+app.use(cookieParser());
+app.use(passport.initialize());
 
 app.use("/api", healthRoutes);
+app.use("/api/auth", authRoutes);
 
 app.use(errorHandler);
 
