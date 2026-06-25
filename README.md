@@ -51,6 +51,12 @@ Create `server/.env` from `server/.env.example`.
 | `DATABASE_URL` | PostgreSQL connection string for `cortex_db` | `postgresql://user:password@localhost:5432/cortex_db` |
 | `NODE_ENV` | Runtime environment. Use `development` locally. | `development` |
 | `CLIENT_URL` | React dev server origin allowed by CORS | `http://localhost:5173` |
+| `ACCESS_TOKEN_SECRET` | Secret used to sign short-lived access JWTs | `replace-with-a-long-random-access-token-secret` |
+| `REFRESH_TOKEN_SECRET` | Secret used to hash refresh tokens before storage | `replace-with-a-long-random-refresh-token-secret` |
+| `REFRESH_TOKEN_EXPIRES_DAYS` | Number of days before refresh tokens expire | `7` |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | `your-google-client-id` |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | `your-google-client-secret` |
+| `GOOGLE_CALLBACK_URL` | Google OAuth callback URL registered in Google Cloud | `http://localhost:5000/api/auth/google/callback` |
 
 ### Client
 
@@ -89,6 +95,25 @@ CREATE TABLE IF NOT EXISTS workspaces (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+```
+
+Assignment 2 adds refresh token rotation support:
+
+```sql
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash VARCHAR(255) NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id
+  ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_users_email
+  ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_google_id
+  ON users(google_id);
 ```
 
 If `gen_random_uuid()` is unavailable in your PostgreSQL install, enable `pgcrypto` inside `cortex_db`:
@@ -130,6 +155,21 @@ If PostgreSQL becomes unreachable after startup, `/api/health` returns status co
 
 If `DATABASE_URL` is wrong at startup, the server exits with code `1`.
 
+## Auth API
+
+Access tokens are returned in JSON and should be kept in memory by the client. Refresh tokens are stored only as httpOnly cookies, and only an HMAC-SHA256 hash of each refresh token is stored in PostgreSQL.
+
+| Method | Route | Description |
+| --- | --- | --- |
+| `POST` | `/api/auth/register` | Create a user, set refresh cookie, return access token |
+| `POST` | `/api/auth/login` | Verify credentials, set refresh cookie, return access token |
+| `POST` | `/api/auth/refresh` | Rotate refresh token and return a new access token |
+| `POST` | `/api/auth/logout` | Delete the current refresh token and clear the cookie |
+| `POST` | `/api/auth/logout-all` | Protected route that deletes all refresh tokens for the user |
+| `GET` | `/api/auth/me` | Protected route that returns the current user |
+| `GET` | `/api/auth/google` | Start Google OAuth |
+| `GET` | `/api/auth/google/callback` | Google OAuth callback |
+
 ## Client Setup
 
 ```bash
@@ -141,6 +181,12 @@ npm run dev
 The React app runs at `http://localhost:5173`.
 
 The home page calls `GET /api/health` through `src/api/axiosInstance.js` and shows a green indicator when the API and database are connected, or red when unavailable.
+
+Auth pages:
+
+- `/register` creates an account and moves to the dashboard.
+- `/login` authenticates with email/password or Google OAuth.
+- `/dashboard` calls `/api/auth/me` with the in-memory access token and attempts `/api/auth/refresh` if needed.
 
 ## Run Both Concurrently
 
