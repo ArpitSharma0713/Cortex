@@ -19,6 +19,7 @@ try {
 
 const { default: healthRoutes } = await import("./routes/health.js");
 const { default: authRoutes } = await import("./routes/auth.js");
+const { default: workspaceRoutes } = await import("./routes/workspaces.js");
 const { testConnection } = await import("./config/db.js");
 const { default: passport } = await import("./config/passport.js");
 
@@ -36,6 +37,7 @@ app.use(passport.initialize());
 
 app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/workspaces", workspaceRoutes);
 
 app.use(errorHandler);
 
