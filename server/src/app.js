@@ -3,12 +3,21 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import healthRoutes from "./routes/health.js";
 import errorHandler from "./middleware/errorHandler.js";
-import { testConnection } from "./config/db.js";
+import validateEnv from "./config/validateEnv.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+try {
+  validateEnv();
+} catch (error) {
+  console.error("Environment validation failed:", error.message);
+  process.exit(1);
+}
+
+const { default: healthRoutes } = await import("./routes/health.js");
+const { testConnection } = await import("./config/db.js");
 
 app.use(helmet());
 app.use(
