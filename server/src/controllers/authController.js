@@ -80,13 +80,13 @@ export async function login(req, res, next) {
     const user = await findUserByEmail(email);
 
     if (!user?.password_hash) {
-      throw createError(401, "Invalid email or password");
+      throw createError(401, "Invalid credentials");
     }
 
     const passwordMatches = await comparePassword(password, user.password_hash);
 
     if (!passwordMatches) {
-      throw createError(401, "Invalid email or password");
+      throw createError(401, "Invalid credentials");
     }
 
     const payload = await issueAuthTokens(res, user);
