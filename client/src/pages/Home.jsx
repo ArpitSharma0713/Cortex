@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import api from "../api/axiosInstance";
 
 const styles = {
@@ -110,6 +111,11 @@ function Home() {
         <p style={styles.copy}>
           Express, React, and PostgreSQL are wired together with a live health
           check.
+        </p>
+        <p className="home-actions">
+          <Link to="/register">Register</Link>
+          <Link to="/login">Login</Link>
+          <Link to="/dashboard">Dashboard</Link>
         </p>
 
         <div style={styles.healthBox}>
