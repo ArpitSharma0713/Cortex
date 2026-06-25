@@ -170,6 +170,17 @@ Access tokens are returned in JSON and should be kept in memory by the client. R
 | `GET` | `/api/auth/google` | Start Google OAuth |
 | `GET` | `/api/auth/google/callback` | Google OAuth callback |
 
+## Usage Limits
+
+AI query limits are enforced per user per day from PostgreSQL. Use `consumeDailyQueryQuota(userId)` in server code immediately before any Claude API call, or mount `checkQueryLimit` before an AI route handler. When the daily limit is exceeded, the API returns `429 Too Many Requests`.
+
+Current hard limits:
+
+| Plan | Queries per day | Documents per month | Chunks per document |
+| --- | ---: | ---: | ---: |
+| `free` | 10 | 5 | 100 |
+| `pro` | 100 | 50 | 500 |
+
 ## Client Setup
 
 ```bash
