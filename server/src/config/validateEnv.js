@@ -7,6 +7,11 @@ const requiredEnvVars = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_CALLBACK_URL",
+
+  //ASSIGNMENT 5
+  "OPENAI_API_KEY",
+  "QDRANT_URL",
+  "QDRANT_COLLECTION"
 ];
 
 export default function validateEnv() {
