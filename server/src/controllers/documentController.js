@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import * as documentService from "../services/documentService.js";
+import { embedDocument } from "../services/embeddingService.js";
 import * as workspaceService from "../services/workspaceService.js";
 import { chunkText } from "../utils/chunker.js";
 import { extractTextFromBuffer } from "../utils/pdfParser.js";
@@ -16,6 +17,7 @@ function formatDocument(document) {
     status: document.status,
     pageCount: document.page_count,
     chunkCount: document.chunk_count,
+    embeddedChunkCount: document.embedded_chunk_count,
     errorMessage: document.error_message,
     createdAt: document.created_at,
     updatedAt: document.updated_at,
@@ -95,14 +97,49 @@ async function processDocument(documentId, buffer, workspaceId, userId) {
     }));
 
     await documentService.insertChunks(chunkRecords);
+    const { embedded } = await embedDocument(documentId);
+
     await documentService.updateDocumentStatus(documentId, "ready", {
       pageCount,
       chunkCount: chunks.length,
+      embeddedChunkCount: embedded,
     });
   } catch (error) {
     await documentService.updateDocumentStatus(documentId, "failed", {
       errorMessage: error.message,
     });
+    throw error;
+  }
+}
+
+export async function getEmbeddingStatus(req, res, next) {
+  try {
+    await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
+
+    const document = await documentService.getDocumentById(
+      req.params.id,
+      req.params.workspaceId,
+      req.user.id,
+    );
+
+    if (!document) {
+      throw createError(404, "Document not found");
+    }
+
+    const formattedDocument = formatDocument(document);
+
+    return res.status(200).json({
+      documentId: formattedDocument.id,
+      status: formattedDocument.status,
+      chunkCount: formattedDocument.chunkCount,
+      embeddedChunkCount: formattedDocument.embeddedChunkCount,
+      isFullyEmbedded:
+        formattedDocument.chunkCount === formattedDocument.embeddedChunkCount &&
+        formattedDocument.chunkCount > 0,
+      errorMessage: formattedDocument.errorMessage || null,
+    });
+  } catch (error) {
+    return next(error);
   }
 }
 

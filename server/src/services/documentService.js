@@ -1,4 +1,5 @@
 import pool from "../config/db.js";
+import { deleteDocumentVectors } from "./embeddingService.js";
 
 const documentSelect = `
   id,
@@ -11,6 +12,7 @@ const documentSelect = `
   status,
   page_count,
   chunk_count,
+  embedded_chunk_count,
   error_message,
   created_at,
   updated_at
@@ -19,6 +21,7 @@ const documentSelect = `
 const statusExtraColumns = {
   pageCount: "page_count",
   chunkCount: "chunk_count",
+  embeddedChunkCount: "embedded_chunk_count",
   errorMessage: "error_message",
 };
 
@@ -173,6 +176,14 @@ export async function getDocumentById(documentId, workspaceId, userId) {
 }
 
 export async function deleteDocument(documentId, workspaceId, userId) {
+  const existingDocument = await getDocumentById(documentId, workspaceId, userId);
+
+  if (!existingDocument) {
+    return false;
+  }
+
+  await deleteDocumentVectors(documentId);
+
   const client = await pool.connect();
 
   try {
