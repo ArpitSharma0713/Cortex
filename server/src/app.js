@@ -22,7 +22,7 @@ const { default: authRoutes } = await import("./routes/auth.js");
 const { default: workspaceRoutes } = await import("./routes/workspaces.js");
 const { default: documentRoutes } = await import("./routes/documents.js");
 const { testConnection } = await import("./config/db.js");
-const { initQdrantCollection } = await import("./config/qdrant.js");//assignmrnt5
+const { initQdrantCollection } = await import("./config/qdrant.js");
 const { default: passport } = await import("./config/passport.js");
 
 app.use(helmet());
@@ -48,16 +48,7 @@ async function startServer() {
   try {
     // PostgreSQL is mandatory
     await testConnection();
-
-    // Qdrant is optional (degraded mode if unavailable)
-    try {
-      await initQdrantCollection();
-    } catch (error) {
-      console.warn(
-        `⚠️ Qdrant unavailable. Running in degraded mode: ${error.message}`,
-      );
-    }
-
+    await initQdrantCollection();
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

@@ -7,11 +7,10 @@ const requiredEnvVars = [
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_CALLBACK_URL",
-
-  //ASSIGNMENT 5
   "OPENAI_API_KEY",
   "QDRANT_URL",
-  "QDRANT_COLLECTION"
+  "QDRANT_API_KEY",
+  "QDRANT_COLLECTION",
 ];
 
 export default function validateEnv() {
@@ -38,6 +37,14 @@ export default function validateEnv() {
 
     if (!Number.isInteger(days) || days <= 0) {
       throw new Error("REFRESH_TOKEN_EXPIRES_DAYS must be a positive integer");
+    }
+  }
+
+  if (process.env.EMBEDDING_DIMENSION) {
+    const dimension = Number(process.env.EMBEDDING_DIMENSION);
+
+    if (!Number.isInteger(dimension) || dimension <= 0) {
+      throw new Error("EMBEDDING_DIMENSION must be a positive integer");
     }
   }
 }

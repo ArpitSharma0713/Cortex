@@ -2,6 +2,10 @@
 
 A full-stack knowledge workspace app with an Express API, React client, PostgreSQL persistence, JWT auth, workspace management, document ingestion, and usage-limit groundwork for AI queries.
 
+## Team Workflow
+
+If multiple people are working on this repo, keep `main` stable and use task branches plus pull requests for all changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full 2-person workflow, branch rules, issue usage, PR checklist, and recommended GitHub branch protection settings.
+
 ## Prerequisites
 
 - Node.js 20 or newer
@@ -33,7 +37,6 @@ cortex/
 |   |   |-- services/
 |   |   |-- utils/
 |   |   `-- app.js
-|   |-- .env.example
 |   `-- package.json
 |-- client/
 |   |-- src/
@@ -49,7 +52,7 @@ cortex/
 
 ## Environment Variables
 
-Create `server/.env` from `server/.env.example`.
+Create `server/.env`.
 
 | Variable | Description | Example |
 | --- | --- | --- |
@@ -63,6 +66,12 @@ Create `server/.env` from `server/.env.example`.
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | `your-google-client-id` |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | `your-google-client-secret` |
 | `GOOGLE_CALLBACK_URL` | Google OAuth callback URL registered in Google Cloud | `http://localhost:5000/api/auth/google/callback` |
+| `OPENAI_API_KEY` | OpenAI API key used to create embeddings | `your_openai_key` |
+| `QDRANT_URL` | Qdrant Cloud cluster URL | `https://your-cluster.qdrant.io` |
+| `QDRANT_API_KEY` | Qdrant API key used for vector storage | `your_qdrant_api_key` |
+| `QDRANT_COLLECTION` | Qdrant collection for document chunk vectors | `cortex_chunks` |
+| `EMBEDDING_MODEL` | OpenAI embedding model name | `text-embedding-3-small` |
+| `EMBEDDING_DIMENSION` | Vector size for the embedding model | `1536` |
 
 Create `client/.env`.
 
@@ -154,6 +163,7 @@ CREATE TABLE IF NOT EXISTS documents (
   status VARCHAR(20) DEFAULT 'pending',
   page_count INTEGER,
   chunk_count INTEGER DEFAULT 0,
+  embedded_chunk_count INTEGER DEFAULT 0,
   error_message TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -203,7 +213,6 @@ CREATE INDEX IF NOT EXISTS idx_user_query_usage_user_date
 ```bash
 cd server
 npm install
-cp .env.example .env
 npm run dev
 ```
 
