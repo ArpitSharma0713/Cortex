@@ -1,13 +1,14 @@
 import { retrieveRelevantChunks } from "../services/retrievalService.js";
 import * as queryService from "../services/queryService.js";
 import * as workspaceService from "../services/workspaceService.js";
-import { generateCompletion } from "../utils/llm.js";
+import { streamCompletion } from "../utils/llm.js";
 import { buildRagPrompt } from "../utils/promptBuilder.js";
 
 const DAILY_QUERY_LIMIT = 20;
 
 export async function askQuestion(req, res, next) {
   let queryRecord;
+  let fullAnswer = "";
 
   try {
     const { workspaceId } = req.params;
@@ -44,47 +45,72 @@ export async function askQuestion(req, res, next) {
     );
     const prompt = buildRagPrompt(question, chunks);
 
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
     if (!prompt) {
       const answer =
         "I don't have any relevant documents to answer this question. Try uploading some content to this workspace first.";
       await queryService.completeQuery(queryRecord.id, answer, [], 0);
 
-      return res.status(200).json({
-        queryId: queryRecord.id,
-        answer,
-        sources: [],
-      });
+      res.write(
+        `data: ${JSON.stringify({ type: "token", content: answer })}\n\n`,
+      );
+      res.write(
+        `data: ${JSON.stringify({
+          type: "done",
+          queryId: queryRecord.id,
+          sources: [],
+        })}\n\n`,
+      );
+      return res.end();
     }
 
-    const { text, usage } = await generateCompletion(
+    for await (const delta of streamCompletion(
       prompt.systemPrompt,
       prompt.userPrompt,
-    );
-    const chunkIds = chunks.map((chunk) => chunk.chunkId);
-    await queryService.completeQuery(
-      queryRecord.id,
-      text,
-      chunkIds,
-      usage?.total_tokens || null,
-    );
+    )) {
+      fullAnswer += delta;
+      res.write(
+        `data: ${JSON.stringify({ type: "token", content: delta })}\n\n`,
+      );
+    }
 
-    return res.status(200).json({
-      queryId: queryRecord.id,
-      answer: text,
-      sources: chunks.map((chunk) => ({
-        chunkId: chunk.chunkId,
-        documentId: chunk.documentId,
-        excerpt: chunk.content.slice(0, 200),
-        pageNumber: chunk.pageNumber,
-        relevanceScore: chunk.score,
-      })),
-    });
+    const chunkIds = chunks.map((chunk) => chunk.chunkId);
+    await queryService.completeQuery(queryRecord.id, fullAnswer, chunkIds, null);
+
+    const sources = chunks.map((chunk) => ({
+      chunkId: chunk.chunkId,
+      documentId: chunk.documentId,
+      excerpt: chunk.content.slice(0, 200),
+      pageNumber: chunk.pageNumber,
+      relevanceScore: chunk.score,
+    }));
+
+    res.write(
+      `data: ${JSON.stringify({
+        type: "done",
+        queryId: queryRecord.id,
+        sources,
+      })}\n\n`,
+    );
+    return res.end();
   } catch (error) {
     if (queryRecord) {
       await queryService.failQuery(queryRecord.id, error.message).catch(() => {});
     }
 
+    if (res.headersSent) {
+      res.write(
+        `data: ${JSON.stringify({
+          type: "error",
+          message: "Something went wrong",
+        })}\n\n`,
+      );
+      return res.end();
+    }
+
     return next(error);
   }
 }
-

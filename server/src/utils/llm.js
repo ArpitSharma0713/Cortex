@@ -43,3 +43,24 @@ export async function generateCompletion(systemPrompt, userPrompt) {
     usage: response.usage,
   };
 }
+
+export async function* streamCompletion(systemPrompt, userPrompt) {
+  const stream = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 800,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+
+    if (delta) {
+      yield delta;
+    }
+  }
+}
