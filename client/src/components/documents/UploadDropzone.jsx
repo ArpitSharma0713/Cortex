@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import api from "../../api/axiosInstance";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -97,4 +97,3 @@ export default function UploadDropzone({
     </div>
   );
 }
-

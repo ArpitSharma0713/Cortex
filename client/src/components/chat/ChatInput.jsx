@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 export default function ChatInput({ disabled, onSend }) {
   const [question, setQuestion] = useState("");
@@ -31,4 +31,3 @@ export default function ChatInput({ disabled, onSend }) {
     </form>
   );
 }
-

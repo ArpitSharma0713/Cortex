@@ -1,3 +1,4 @@
+import React from "react";
 import { useStreamingQuery } from "../../hooks/useStreamingQuery";
 import ChatInput from "./ChatInput";
 import MessageList from "./MessageList";
@@ -23,4 +24,3 @@ export default function ChatInterface({ onUnauthorized, token, workspaceId }) {
     </section>
   );
 }
-

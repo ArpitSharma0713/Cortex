@@ -1,3 +1,5 @@
+import React from "react";
+
 export default function SourceCard({ source }) {
   return (
     <button className="source-card" type="button">
@@ -13,4 +15,3 @@ export default function SourceCard({ source }) {
     </button>
   );
 }
-

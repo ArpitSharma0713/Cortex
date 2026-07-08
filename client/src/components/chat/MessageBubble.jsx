@@ -1,3 +1,4 @@
+import React from "react";
 import ReactMarkdown from "react-markdown";
 import SourceCard from "./SourceCard";
 
@@ -26,4 +27,3 @@ export default function MessageBubble({ message }) {
     </div>
   );
 }
-

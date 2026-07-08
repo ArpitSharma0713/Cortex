@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import ChatInterface from "../chat/ChatInterface";
 import DocumentSidebar from "../documents/DocumentSidebar";
 import UploadDropzone from "../documents/UploadDropzone";
@@ -32,4 +32,3 @@ export default function WorkspaceLayout({ onUnauthorized, token, workspaceId }) 
     </div>
   );
 }
-

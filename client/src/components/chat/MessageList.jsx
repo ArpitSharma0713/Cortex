@@ -1,3 +1,4 @@
+import React from "react";
 import MessageBubble from "./MessageBubble";
 
 export default function MessageList({ messages }) {
@@ -13,4 +14,3 @@ export default function MessageList({ messages }) {
     </div>
   );
 }
-
