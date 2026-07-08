@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosInstance";
+import ChatInterface from "./ChatInterface";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
 import DocumentList from "./DocumentList";
 import UploadButton from "./UploadButton";
@@ -161,6 +162,11 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
             accessToken={accessToken}
             onUnauthorized={clearAuthAndRedirect}
             refreshSignal={documentRefreshSignal}
+            workspaceId={selectedWorkspace.id}
+          />
+          <ChatInterface
+            accessToken={accessToken}
+            onUnauthorized={clearAuthAndRedirect}
             workspaceId={selectedWorkspace.id}
           />
         </div>

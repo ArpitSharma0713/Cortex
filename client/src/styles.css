@@ -361,6 +361,82 @@ pre {
   color: #b91c1c;
 }
 
+.chat-section {
+  border-top: 1px solid #d9dee8;
+  display: grid;
+  gap: 16px;
+  padding-top: 20px;
+}
+
+.chat-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.chat-header h2,
+.chat-header p {
+  margin: 0;
+}
+
+.chat-header p {
+  color: #4c5565;
+}
+
+.chat-messages {
+  display: grid;
+  gap: 12px;
+}
+
+.chat-message {
+  border: 1px solid #d9dee8;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.chat-question {
+  font-weight: 700;
+  margin: 0;
+}
+
+.chat-answer {
+  color: #17202a;
+  line-height: 1.5;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.source-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.source-card {
+  background: #f6f7f9;
+  border: 1px solid #d9dee8;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+}
+
+.source-card span {
+  font-weight: 700;
+}
+
+.source-card p,
+.source-card small {
+  color: #4c5565;
+  margin: 0;
+}
+
+.chat-form {
+  align-items: start;
+}
+
 @media (max-width: 520px) {
   .home-actions {
     align-items: flex-start;
