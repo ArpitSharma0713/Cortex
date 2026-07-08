@@ -21,6 +21,7 @@ const { default: healthRoutes } = await import("./routes/health.js");
 const { default: authRoutes } = await import("./routes/auth.js");
 const { default: workspaceRoutes } = await import("./routes/workspaces.js");
 const { default: documentRoutes } = await import("./routes/documents.js");
+const { default: queryRoutes } = await import("./routes/query.js");
 const { testConnection } = await import("./config/db.js");
 const { initQdrantCollection } = await import("./config/qdrant.js");
 const { default: passport } = await import("./config/passport.js");
@@ -41,6 +42,7 @@ app.use("/api", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/workspaces", workspaceRoutes);
 app.use("/api/workspaces", documentRoutes);
+app.use("/api/workspaces", queryRoutes);
 
 app.use(errorHandler);
 
