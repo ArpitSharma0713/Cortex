@@ -11,6 +11,7 @@ export function buildRagPrompt(question, chunks) {
 
 Rules:
 - If the sources don't contain enough information to answer, say so explicitly. Do not make up information.
+- If the user asks what the document or source is about, summarize the provided sources.
 - Cite which source number(s) support each claim using [Source N] notation.
 - Be concise and direct.
 
@@ -22,4 +23,3 @@ ${context}`;
     userPrompt: question,
   };
 }
-

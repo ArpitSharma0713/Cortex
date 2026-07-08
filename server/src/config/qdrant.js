@@ -1,6 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 
 const DEFAULT_EMBEDDING_DIMENSION = 1536;
+const payloadIndexes = ["workspace_id", "user_id", "document_id"];
 
 export const qdrant = new QdrantClient({
   url: process.env.QDRANT_URL,
@@ -29,6 +30,26 @@ export async function initQdrantCollection() {
       console.log(`Qdrant collection '${name}' created`);
     } else {
       console.log(`Qdrant collection '${name}' already exists`);
+    }
+
+    for (const fieldName of payloadIndexes) {
+      try {
+        await qdrant.createPayloadIndex(name, {
+          wait: true,
+          field_name: fieldName,
+          field_schema: "keyword",
+        });
+      } catch (indexError) {
+        const message =
+          indexError.data?.status?.error || indexError.message || "";
+
+        if (!message.toLowerCase().includes("already exists")) {
+          console.warn(
+            `Qdrant payload index '${fieldName}' unavailable:`,
+            indexError.message,
+          );
+        }
+      }
     }
   } catch (error) {
     console.warn("Qdrant unavailable on startup:", error.message);
