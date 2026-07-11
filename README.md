@@ -204,6 +204,24 @@ CREATE TABLE IF NOT EXISTS user_query_usage (
 
 CREATE INDEX IF NOT EXISTS idx_user_query_usage_user_date
   ON user_query_usage(user_id, usage_date);
+
+CREATE TABLE IF NOT EXISTS queries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  question TEXT NOT NULL,
+  answer TEXT,
+  chunk_ids UUID[],
+  token_count INTEGER,
+  status VARCHAR(20) DEFAULT 'pending'
+    CHECK (status IN ('pending', 'completed', 'failed')),
+  error_message TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_queries_workspace_id ON queries(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_queries_user_id ON queries(user_id);
+CREATE INDEX IF NOT EXISTS idx_queries_created_at ON queries(created_at);
 ```
 
 `ON DELETE CASCADE` keeps child data from becoming orphaned. For example, deleting a user removes that user's workspaces, documents, chunks, refresh tokens, and query-usage rows.

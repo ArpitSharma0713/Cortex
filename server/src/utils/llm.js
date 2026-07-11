@@ -1,4 +1,7 @@
+import OpenAI from "openai";
+
 const MAX_RETRIES = 3;
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function callWithRetry(fn, retries = MAX_RETRIES) {
   for (let attempt = 0; attempt < retries; attempt += 1) {
@@ -22,3 +25,42 @@ export async function callWithRetry(fn, retries = MAX_RETRIES) {
   }
 }
 
+export async function generateCompletion(systemPrompt, userPrompt) {
+  const response = await callWithRetry(() =>
+    client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 800,
+    }),
+  );
+
+  return {
+    text: response.choices[0].message.content,
+    usage: response.usage,
+  };
+}
+
+export async function* streamCompletion(systemPrompt, userPrompt) {
+  const stream = await client.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 800,
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content;
+
+    if (delta) {
+      yield delta;
+    }
+  }
+}

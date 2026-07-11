@@ -10,6 +10,8 @@ export function chunkText(text, options = {}) {
   const overlapChars = overlap * CHARS_PER_TOKEN;
 
   const cleaned = text
+    .replace(/\u0000/g, "")
+    .replace(/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+/g, " ")

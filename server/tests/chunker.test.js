@@ -56,4 +56,10 @@ describe("chunkText", () => {
     expect(result).toHaveLength(1);
     expect(result[0].tokenCount).toBe(512);
   });
+
+  it("removes null bytes before returning chunks", () => {
+    const result = chunkText("Hello\u0000 world.");
+
+    expect(result[0].content).toBe("Hello world.");
+  });
 });

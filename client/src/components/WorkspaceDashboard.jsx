@@ -2,8 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axiosInstance";
 import CreateWorkspaceModal from "./CreateWorkspaceModal";
-import DocumentList from "./DocumentList";
-import UploadButton from "./UploadButton";
+import WorkspaceLayout from "./workspace/WorkspaceLayout";
 import WorkspaceCard from "./WorkspaceCard";
 
 function WorkspaceDashboard({ accessToken, setAuth }) {
@@ -13,7 +12,6 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
   const [error, setError] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedWorkspace, setSelectedWorkspace] = useState(null);
-  const [documentRefreshSignal, setDocumentRefreshSignal] = useState(0);
 
   function authHeaders() {
     return {
@@ -148,19 +146,10 @@ function WorkspaceDashboard({ accessToken, setAuth }) {
               <h1>{selectedWorkspace.name}</h1>
               <p>{selectedWorkspace.description || "No description"}</p>
             </div>
-            <UploadButton
-              accessToken={accessToken}
-              onUnauthorized={clearAuthAndRedirect}
-              onUploaded={() =>
-                setDocumentRefreshSignal((currentSignal) => currentSignal + 1)
-              }
-              workspaceId={selectedWorkspace.id}
-            />
           </div>
-          <DocumentList
-            accessToken={accessToken}
+          <WorkspaceLayout
             onUnauthorized={clearAuthAndRedirect}
-            refreshSignal={documentRefreshSignal}
+            token={accessToken}
             workspaceId={selectedWorkspace.id}
           />
         </div>

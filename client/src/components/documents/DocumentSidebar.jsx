@@ -1,13 +1,30 @@
 import React, { useEffect, useState } from "react";
-import api from "../api/axiosInstance";
-
-const activeStatuses = new Set(["pending", "processing"]);
+import api from "../../api/axiosInstance";
 
 function statusLabel(status) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-function DocumentList({ accessToken, onUnauthorized, refreshSignal, workspaceId }) {
+function isEmbeddingComplete(document) {
+  return (
+    document.status === "ready" &&
+    (document.chunkCount || 0) === (document.embeddedChunkCount || 0)
+  );
+}
+
+function shouldPoll(document) {
+  return (
+    ["pending", "processing"].includes(document.status) ||
+    (document.status === "ready" && !isEmbeddingComplete(document))
+  );
+}
+
+export default function DocumentSidebar({
+  onUnauthorized,
+  refreshKey,
+  token,
+  workspaceId,
+}) {
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -19,16 +36,13 @@ function DocumentList({ accessToken, onUnauthorized, refreshSignal, workspaceId 
 
     try {
       const response = await api.get(`/workspaces/${workspaceId}/documents`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       setDocuments(response.data.documents);
       setError("");
     } catch (requestError) {
       if (requestError.response?.status === 401) {
-        onUnauthorized();
+        onUnauthorized?.();
       } else {
         setError("Could not load documents");
       }
@@ -39,14 +53,10 @@ function DocumentList({ accessToken, onUnauthorized, refreshSignal, workspaceId 
 
   useEffect(() => {
     fetchDocuments();
-  }, [workspaceId, refreshSignal]);
+  }, [workspaceId, refreshKey]);
 
   useEffect(() => {
-    const hasActiveDocument = documents.some((document) =>
-      activeStatuses.has(document.status),
-    );
-
-    if (!hasActiveDocument) {
+    if (!documents.some(shouldPoll)) {
       return undefined;
     }
 
@@ -55,22 +65,20 @@ function DocumentList({ accessToken, onUnauthorized, refreshSignal, workspaceId 
     }, 3000);
 
     return () => window.clearInterval(intervalId);
-  }, [documents, workspaceId, accessToken]);
-
-  if (isLoading) {
-    return <p className="status-line">Loading documents...</p>;
-  }
+  }, [documents, workspaceId, token]);
 
   return (
-    <section className="document-section">
+    <section className="document-sidebar-section">
       <h2>Documents</h2>
       {error && <p className="form-error">{error}</p>}
-      {documents.length === 0 && (
-        <p className="empty-state">No documents yet - upload your first PDF</p>
+      {isLoading && <p className="status-line">Loading documents...</p>}
+      {!isLoading && documents.length === 0 && (
+        <p className="empty-state">No documents yet</p>
       )}
-      <div className="document-list">
+      <div className="sidebar-document-list">
         {documents.map((document) => (
-          <article className="document-row" key={document.id}>
+          // TODO: Filter chat context to this document when document-scoped chat is added.
+          <button className="sidebar-document" key={document.id} type="button">
             <div>
               <h3>{document.name}</h3>
               <p>{document.originalFilename}</p>
@@ -78,28 +86,16 @@ function DocumentList({ accessToken, onUnauthorized, refreshSignal, workspaceId 
             <span className={`status-badge status-${document.status}`}>
               {statusLabel(document.status)}
             </span>
-            <dl>
-              <div>
-                <dt>Chunks</dt>
-                <dd>{document.chunkCount}</dd>
-              </div>
-              <div>
-                <dt>Pages</dt>
-                <dd>{document.pageCount || "-"}</dd>
-              </div>
-              <div>
-                <dt>Uploaded</dt>
-                <dd>{new Date(document.createdAt).toLocaleDateString()}</dd>
-              </div>
-            </dl>
+            <div className="embedding-progress">
+              {(document.embeddedChunkCount || 0)} / {document.chunkCount || 0}{" "}
+              embedded
+            </div>
             {document.errorMessage && (
               <p className="form-error">{document.errorMessage}</p>
             )}
-          </article>
+          </button>
         ))}
       </div>
     </section>
   );
 }
-
-export default DocumentList;
