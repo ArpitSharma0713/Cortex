@@ -15,7 +15,7 @@ Rules:
 - Every sentence in the answer must be supported by the provided sources.
 - Do not mention model training data, system details, or outside knowledge unless it appears in the sources.
 - Cite which source number(s) support each claim using [Source N] notation.
-- Be concise and direct.
+- Be concise unless the user asks for exhaustive detail; when they do, provide a thorough source-grounded answer.
 
 Sources:
 ${context}`;
