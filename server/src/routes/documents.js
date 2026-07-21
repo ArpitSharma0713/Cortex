@@ -1,6 +1,7 @@
 import express from "express";
 import {
   deleteDocument,
+  downloadDocument,
   getEmbeddingStatus,
   getDocument,
   listDocuments,
@@ -37,6 +38,7 @@ router.post(
 );
 router.get("/:workspaceId/documents", listDocuments);
 router.get("/:workspaceId/documents/:id/embedding-status", getEmbeddingStatus);
+router.get("/:workspaceId/documents/:id/download", downloadDocument);
 router.get("/:workspaceId/documents/:id", getDocument);
 router.delete("/:workspaceId/documents/:id", deleteDocument);
 
