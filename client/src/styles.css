@@ -390,6 +390,11 @@ pre {
   font-size: 13px;
 }
 
+.document-download-button {
+  justify-self: start;
+  padding: 8px 10px;
+}
+
 .chat-panel {
   display: grid;
   gap: 16px;
