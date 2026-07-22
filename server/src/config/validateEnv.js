@@ -11,6 +11,11 @@ const requiredEnvVars = [
   "QDRANT_URL",
   "QDRANT_API_KEY",
   "QDRANT_COLLECTION",
+  "R2_ACCOUNT_ID",
+  "R2_ACCESS_KEY_ID",
+  "R2_SECRET_ACCESS_KEY",
+  "R2_BUCKET_NAME",
+  "R2_ENDPOINT",
 ];
 
 export default function validateEnv() {
@@ -46,5 +51,13 @@ export default function validateEnv() {
     if (!Number.isInteger(dimension) || dimension <= 0) {
       throw new Error("EMBEDDING_DIMENSION must be a positive integer");
     }
+  }
+
+  if (
+    process.env.R2_ACCOUNT_ID &&
+    process.env.R2_ENDPOINT &&
+    !process.env.R2_ENDPOINT.includes(process.env.R2_ACCOUNT_ID)
+  ) {
+    throw new Error("R2_ENDPOINT must include R2_ACCOUNT_ID");
   }
 }

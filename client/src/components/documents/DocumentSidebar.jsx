@@ -29,6 +29,32 @@ export default function DocumentSidebar({
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
+  async function downloadDocument(document) {
+    try {
+      const response = await api.get(
+        `/workspaces/${workspaceId}/documents/${document.id}/download`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: "blob",
+        },
+      );
+      const url = window.URL.createObjectURL(response.data);
+      const link = window.document.createElement("a");
+
+      link.href = url;
+      link.download = document.originalFilename || document.name;
+      link.click();
+      window.URL.revokeObjectURL(url);
+      setError("");
+    } catch (requestError) {
+      if (requestError.response?.status === 401) {
+        onUnauthorized?.();
+      } else {
+        setError("Could not download document");
+      }
+    }
+  }
+
   async function fetchDocuments({ quiet = false } = {}) {
     if (!quiet) {
       setIsLoading(true);
@@ -78,7 +104,7 @@ export default function DocumentSidebar({
       <div className="sidebar-document-list">
         {documents.map((document) => (
           // TODO: Filter chat context to this document when document-scoped chat is added.
-          <button className="sidebar-document" key={document.id} type="button">
+          <article className="sidebar-document" key={document.id}>
             <div>
               <h3>{document.name}</h3>
               <p>{document.originalFilename}</p>
@@ -93,7 +119,16 @@ export default function DocumentSidebar({
             {document.errorMessage && (
               <p className="form-error">{document.errorMessage}</p>
             )}
-          </button>
+            {document.storageKey && (
+              <button
+                className="document-download-button"
+                onClick={() => downloadDocument(document)}
+                type="button"
+              >
+                Download original
+              </button>
+            )}
+          </article>
         ))}
       </div>
     </section>

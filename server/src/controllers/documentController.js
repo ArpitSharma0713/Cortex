@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from "uuid";
 import * as documentService from "../services/documentService.js";
 import { embedDocument } from "../services/embeddingService.js";
+import {
+  buildStorageKey,
+  computeHash,
+  downloadFromR2,
+  uploadToR2,
+} from "../services/storageService.js";
 import * as workspaceService from "../services/workspaceService.js";
 import { chunkText } from "../utils/chunker.js";
 import { extractTextFromBuffer } from "../utils/pdfParser.js";
@@ -18,6 +24,9 @@ function formatDocument(document) {
     pageCount: document.page_count,
     chunkCount: document.chunk_count,
     embeddedChunkCount: document.embedded_chunk_count,
+    storageKey: document.storage_key,
+    sha256Hash: document.sha256_hash,
+    deletedAt: document.deleted_at,
     errorMessage: document.error_message,
     createdAt: document.created_at,
     updatedAt: document.updated_at,
@@ -48,6 +57,19 @@ export async function uploadDocument(req, res, next) {
 
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
+    const hash = computeHash(req.file.buffer);
+    const existingDocument = await documentService.findByHash(
+      req.params.workspaceId,
+      hash,
+    );
+
+    if (existingDocument) {
+      return res.status(409).json({
+        error: "This file has already been uploaded to this workspace",
+        documentId: existingDocument.id,
+      });
+    }
+
     const document = await documentService.createDocument(
       req.params.workspaceId,
       req.user.id,
@@ -56,6 +78,7 @@ export async function uploadDocument(req, res, next) {
         originalFilename: req.file.originalname,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
+        sha256Hash: hash,
       },
     );
 
@@ -70,6 +93,8 @@ export async function uploadDocument(req, res, next) {
       req.file.buffer,
       req.params.workspaceId,
       req.user.id,
+      req.file.originalname,
+      req.file.mimetype,
     ).catch((error) =>
       console.error(`Processing failed for ${document.id}:`, error),
     );
@@ -78,10 +103,21 @@ export async function uploadDocument(req, res, next) {
   }
 }
 
-async function processDocument(documentId, buffer, workspaceId, userId) {
+async function processDocument(
+  documentId,
+  buffer,
+  workspaceId,
+  userId,
+  originalFilename,
+  mimeType,
+) {
   await documentService.updateDocumentStatus(documentId, "processing");
 
   try {
+    const storageKey = buildStorageKey(workspaceId, documentId, originalFilename);
+    await uploadToR2(storageKey, buffer, mimeType);
+    await documentService.setStorageKey(documentId, storageKey);
+
     const { text, pageCount } = await extractTextFromBuffer(buffer);
     const chunks = chunkText(text);
 
@@ -110,6 +146,10 @@ async function processDocument(documentId, buffer, workspaceId, userId) {
     });
     throw error;
   }
+}
+
+function attachmentFilename(filename) {
+  return filename.replace(/[\r\n"]/g, "_");
 }
 
 export async function getEmbeddingStatus(req, res, next) {
@@ -176,6 +216,34 @@ export async function getDocument(req, res, next) {
     }
 
     return res.status(200).json(formatDocument(document));
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function downloadDocument(req, res, next) {
+  try {
+    await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
+
+    const document = await documentService.getDocumentById(
+      req.params.id,
+      req.params.workspaceId,
+      req.user.id,
+    );
+
+    if (!document || !document.storage_key) {
+      throw createError(404, "Document not found");
+    }
+
+    const buffer = await downloadFromR2(document.storage_key);
+
+    res.setHeader("Content-Type", document.mime_type);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${attachmentFilename(document.original_filename)}"`,
+    );
+
+    return res.send(buffer);
   } catch (error) {
     return next(error);
   }

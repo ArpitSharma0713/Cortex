@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
 import { deleteDocumentVectors } from "./embeddingService.js";
+import { deleteFromR2 } from "./storageService.js";
 
 const documentSelect = `
   id,
@@ -13,6 +14,9 @@ const documentSelect = `
   page_count,
   chunk_count,
   embedded_chunk_count,
+  storage_key,
+  sha256_hash,
+  deleted_at,
   error_message,
   created_at,
   updated_at
@@ -28,7 +32,7 @@ const statusExtraColumns = {
 export async function createDocument(
   workspaceId,
   userId,
-  { name, originalFilename, fileSize, mimeType },
+  { name, originalFilename, fileSize, mimeType, sha256Hash },
 ) {
   const client = await pool.connect();
 
@@ -44,12 +48,21 @@ export async function createDocument(
           original_filename,
           file_size,
           mime_type,
+          sha256_hash,
           status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
         RETURNING ${documentSelect}
       `,
-      [workspaceId, userId, name, originalFilename, fileSize, mimeType],
+      [
+        workspaceId,
+        userId,
+        name,
+        originalFilename,
+        fileSize,
+        mimeType,
+        sha256Hash,
+      ],
     );
 
     await client.query(
@@ -71,6 +84,36 @@ export async function createDocument(
   } finally {
     client.release();
   }
+}
+
+export async function findByHash(workspaceId, hash) {
+  const result = await pool.query(
+    `
+      SELECT ${documentSelect}
+      FROM documents
+      WHERE workspace_id = $1
+        AND sha256_hash = $2
+        AND deleted_at IS NULL
+    `,
+    [workspaceId, hash],
+  );
+
+  return result.rows[0] || null;
+}
+
+export async function setStorageKey(documentId, storageKey) {
+  const result = await pool.query(
+    `
+      UPDATE documents
+      SET storage_key = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      RETURNING ${documentSelect}
+    `,
+    [storageKey, documentId],
+  );
+
+  return result.rows[0] || null;
 }
 
 export async function updateDocumentStatus(documentId, status, extra = {}) {
@@ -152,6 +195,7 @@ export async function getDocumentsByWorkspace(workspaceId, userId) {
       FROM documents
       WHERE workspace_id = $1
         AND user_id = $2
+        AND deleted_at IS NULL
       ORDER BY created_at DESC
     `,
     [workspaceId, userId],
@@ -168,6 +212,7 @@ export async function getDocumentById(documentId, workspaceId, userId) {
       WHERE id = $1
         AND workspace_id = $2
         AND user_id = $3
+        AND deleted_at IS NULL
     `,
     [documentId, workspaceId, userId],
   );
@@ -182,8 +227,6 @@ export async function deleteDocument(documentId, workspaceId, userId) {
     return false;
   }
 
-  await deleteDocumentVectors(documentId);
-
   const client = await pool.connect();
 
   try {
@@ -191,10 +234,13 @@ export async function deleteDocument(documentId, workspaceId, userId) {
 
     const result = await client.query(
       `
-        DELETE FROM documents
+        UPDATE documents
+        SET deleted_at = NOW(),
+            updated_at = NOW()
         WHERE id = $1
           AND workspace_id = $2
           AND user_id = $3
+          AND deleted_at IS NULL
         RETURNING id
       `,
       [documentId, workspaceId, userId],
@@ -214,11 +260,26 @@ export async function deleteDocument(documentId, workspaceId, userId) {
     }
 
     await client.query("COMMIT");
-    return result.rowCount > 0;
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
   } finally {
     client.release();
   }
+
+  try {
+    await deleteDocumentVectors(documentId);
+  } catch (error) {
+    const message = error.data?.status?.error || error.message || "";
+
+    if (!message.toLowerCase().includes("not found")) {
+      throw error;
+    }
+  }
+
+  if (existingDocument.storage_key) {
+    await deleteFromR2(existingDocument.storage_key);
+  }
+
+  return true;
 }
