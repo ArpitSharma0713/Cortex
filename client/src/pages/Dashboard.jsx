@@ -7,11 +7,10 @@ function Dashboard({ auth, setAuth }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [status, setStatus] = useState("Loading dashboard...");
+  const oauthAccessToken = searchParams.get("accessToken");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
-    const oauthAccessToken = searchParams.get("accessToken");
-
     if (oauthAccessToken) {
       setAuth((currentAuth) => ({
         ...currentAuth,
@@ -19,9 +18,13 @@ function Dashboard({ auth, setAuth }) {
       }));
       setSearchParams({});
     }
-  }, [searchParams, setAuth, setSearchParams]);
+  }, [oauthAccessToken, setAuth, setSearchParams]);
 
   useEffect(() => {
+    if (oauthAccessToken) {
+      return undefined;
+    }
+
     let isMounted = true;
 
     async function loadUser() {
@@ -62,7 +65,7 @@ function Dashboard({ auth, setAuth }) {
     return () => {
       isMounted = false;
     };
-  }, [auth.accessToken, navigate, setAuth]);
+  }, [auth.accessToken, navigate, oauthAccessToken, setAuth]);
 
   async function handleLogout() {
     setIsLoggingOut(true);
