@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
-import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import "./styles.css";
@@ -12,10 +11,21 @@ function App() {
     user: null,
   });
 
+  const isAuthenticated = Boolean(auth.accessToken);
+
   return (
     <BrowserRouter>
       <Routes>
-        <Route element={<Home />} path="/" />
+        <Route
+          element={
+            isAuthenticated ? (
+              <Navigate replace to="/dashboard" />
+            ) : (
+              <Navigate replace to="/login" />
+            )
+          }
+          path="/"
+        />
         <Route element={<Register setAuth={setAuth} />} path="/register" />
         <Route element={<Login setAuth={setAuth} />} path="/login" />
         <Route
