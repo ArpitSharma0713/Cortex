@@ -26,3 +26,27 @@ export async function enqueueDocumentProcessing(
     { jobId: documentId },
   );
 }
+export async function retryDocumentProcessing(
+  documentId,
+  storageKey,
+  workspaceId,
+  userId,
+) {
+  const existingJob = await documentQueue.getJob(documentId);
+
+  if (existingJob) {
+    const isFailed = await existingJob.isFailed();
+
+    if (isFailed) {
+      await existingJob.retry("failed", {
+        resetAttemptsMade: true,
+        resetAttemptsStarted: true,
+      });
+      return existingJob;
+    }
+
+    return existingJob;
+  }
+
+  return enqueueDocumentProcessing(documentId, storageKey, workspaceId, userId);
+}

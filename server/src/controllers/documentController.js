@@ -1,4 +1,7 @@
-import { enqueueDocumentProcessing } from "../queues/documentQueue.js";
+import {
+  enqueueDocumentProcessing,
+  retryDocumentProcessing,
+} from "../queues/documentQueue.js";
 import * as documentService from "../services/documentService.js";
 import {
   buildStorageKey,
@@ -213,6 +216,47 @@ export async function downloadDocument(req, res, next) {
   }
 }
 
+export async function retryDocument(req, res, next) {
+  try {
+    await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
+
+    const document = await documentService.getDocumentById(
+      req.params.id,
+      req.params.workspaceId,
+      req.user.id,
+    );
+
+    if (!document) {
+      throw createError(404, "Document not found");
+    }
+
+    if (document.status !== "failed") {
+      return res.status(400).json({ error: "Only failed documents can be retried" });
+    }
+
+    if (!document.storage_key) {
+      return res.status(400).json({ error: "No stored file to retry from" });
+    }
+
+    await retryDocumentProcessing(
+      document.id,
+      document.storage_key,
+      req.params.workspaceId,
+      req.user.id,
+    );
+    await documentService.updateDocumentStatus(document.id, "pending", {
+      errorMessage: null,
+    });
+
+    return res.status(202).json({
+      documentId: document.id,
+      status: "pending",
+      message: "Retry queued",
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
 export async function deleteDocument(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
