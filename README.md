@@ -58,6 +58,7 @@ Create `server/.env`.
 | --- | --- | --- |
 | `PORT` | Port used by the Express API | `5000` |
 | `DATABASE_URL` | PostgreSQL connection string for `cortex_db` | `postgresql://user:password@localhost:5432/cortex_db` |
+| `REDIS_URL` | Redis connection string for BullMQ document jobs | `redis://localhost:6379` |
 | `NODE_ENV` | Runtime environment. Use `development` locally. | `development` |
 | `CLIENT_URL` | React dev server origin allowed by CORS and OAuth redirects | `http://localhost:5173` |
 | `ACCESS_TOKEN_SECRET` | Secret used to sign short-lived access JWTs | `replace-with-a-long-random-access-token-secret` |
@@ -72,6 +73,11 @@ Create `server/.env`.
 | `QDRANT_COLLECTION` | Qdrant collection for document chunk vectors | `cortex_chunks` |
 | `EMBEDDING_MODEL` | OpenAI embedding model name | `text-embedding-3-small` |
 | `EMBEDDING_DIMENSION` | Vector size for the embedding model | `1536` |
+| `R2_ACCOUNT_ID` | Cloudflare R2 account ID | `your-r2-account-id` |
+| `R2_ACCESS_KEY_ID` | Cloudflare R2 access key ID | `your-r2-access-key-id` |
+| `R2_SECRET_ACCESS_KEY` | Cloudflare R2 secret access key | `your-r2-secret-access-key` |
+| `R2_BUCKET_NAME` | R2 bucket for original PDFs | `cortex-documents` |
+| `R2_ENDPOINT` | R2 S3-compatible endpoint | `https://<account_id>.r2.cloudflarestorage.com` |
 
 Create `client/.env`.
 
@@ -262,6 +268,37 @@ Run server tests:
 cd server
 npm test
 ```
+
+
+## Worker Setup
+
+Document parsing and embedding runs in a separate BullMQ worker process backed by Redis.
+
+Start Redis locally with Docker:
+
+```bash
+docker run -p 6379:6379 redis:7-alpine
+```
+
+Run the API and worker in separate terminals:
+
+```bash
+cd server
+npm run dev
+```
+
+```bash
+cd server
+npm run worker:dev
+```
+
+In Railway, create a second service from the same repo with root directory `server` and start command:
+
+```bash
+npm run worker
+```
+
+The worker service needs the same production environment variables as the API service, including `DATABASE_URL`, `REDIS_URL`, `OPENAI_API_KEY`, `QDRANT_*`, and `R2_*`.
 
 ## Client Setup
 
