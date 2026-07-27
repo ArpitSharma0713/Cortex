@@ -144,6 +144,29 @@ export async function updateDocumentStatus(documentId, status, extra = {}) {
   return result.rows[0] || null;
 }
 
+export async function clearDocumentChunks(documentId) {
+  try {
+    await deleteDocumentVectors(documentId);
+  } catch (error) {
+    const message = error.data?.status?.error || error.message || "";
+
+    if (!message.toLowerCase().includes("not found")) {
+      throw error;
+    }
+  }
+
+  await pool.query("DELETE FROM chunks WHERE document_id = $1", [documentId]);
+  await pool.query(
+    `
+      UPDATE documents
+      SET chunk_count = 0,
+          embedded_chunk_count = 0,
+          updated_at = NOW()
+      WHERE id = $1
+    `,
+    [documentId],
+  );
+}
 export async function insertChunks(chunks) {
   if (chunks.length === 0) {
     return [];
