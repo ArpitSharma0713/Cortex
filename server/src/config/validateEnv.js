@@ -11,6 +11,7 @@ const requiredEnvVars = [
   "QDRANT_URL",
   "QDRANT_API_KEY",
   "QDRANT_COLLECTION",
+  "REDIS_URL",
   "R2_ACCOUNT_ID",
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
