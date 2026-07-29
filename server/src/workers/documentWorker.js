@@ -6,6 +6,7 @@ import { embedDocument } from "../services/embeddingService.js";
 import { downloadFromR2 } from "../services/storageService.js";
 import { chunkText } from "../utils/chunker.js";
 import { extractTextFromBuffer } from "../utils/pdfParser.js";
+import { sanitizeText } from "../utils/sanitize.js";
 
 const CONCURRENCY = Number.parseInt(process.env.DOCUMENT_WORKER_CONCURRENCY || "3", 10);
 
@@ -18,7 +19,8 @@ export async function processDocumentJob(job) {
 
   const buffer = await downloadFromR2(storageKey);
   const { text, pageCount } = await extractTextFromBuffer(buffer);
-  const chunks = chunkText(text);
+  const sanitized = sanitizeText(text);
+  const chunks = chunkText(sanitized);
 
   await documentService.clearDocumentChunks(documentId);
 
@@ -67,3 +69,4 @@ documentWorker.on("failed", async (job, error) => {
 documentWorker.on("completed", (job) => {
   console.log(`Job ${job.id} completed:`, job.returnvalue);
 });
+
