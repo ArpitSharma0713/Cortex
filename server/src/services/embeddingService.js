@@ -1,13 +1,8 @@
-import { qdrant } from "../config/qdrant.js";
 import pool from "../config/db.js";
 import { embedTexts } from "../utils/embedder.js";
 import { writeOutboxEvent } from "./outboxService.js";
 
 const EMBED_BATCH_SIZE = 32;
-
-function getCollectionName() {
-  return process.env.QDRANT_COLLECTION;
-}
 
 export async function embedDocument(documentId) {
   const { rows: chunks } = await pool.query(
@@ -109,13 +104,4 @@ export async function embedDocument(documentId) {
   );
 
   return { embedded: rows[0]?.embedded_chunk_count || 0 };
-}
-
-export async function deleteDocumentVectors(documentId) {
-  await qdrant.delete(getCollectionName(), {
-    wait: true,
-    filter: {
-      must: [{ key: "document_id", match: { value: documentId } }],
-    },
-  });
 }

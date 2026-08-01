@@ -1,5 +1,5 @@
 import pool from "../config/db.js";
-import { deleteDocumentVectors } from "./embeddingService.js";
+import { writeOutboxEvent } from "./outboxService.js";
 import { deleteFromR2 } from "./storageService.js";
 
 const documentSelect = `
@@ -145,27 +145,60 @@ export async function updateDocumentStatus(documentId, status, extra = {}) {
 }
 
 export async function clearDocumentChunks(documentId) {
+  const client = await pool.connect();
+
   try {
-    await deleteDocumentVectors(documentId);
-  } catch (error) {
-    const message = error.data?.status?.error || error.message || "";
+    await client.query("BEGIN");
 
-    if (!message.toLowerCase().includes("not found")) {
-      throw error;
+    const { rows } = await client.query(
+      `
+        SELECT
+          workspace_id,
+          EXISTS (
+            SELECT 1
+            FROM chunks
+            WHERE document_id = $1
+          ) AS has_chunks
+        FROM documents
+        WHERE id = $1
+        FOR UPDATE
+      `,
+      [documentId],
+    );
+    const document = rows[0];
+
+    if (!document) {
+      throw new Error("Document not found while clearing chunks");
     }
-  }
 
-  await pool.query("DELETE FROM chunks WHERE document_id = $1", [documentId]);
-  await pool.query(
-    `
-      UPDATE documents
-      SET chunk_count = 0,
-          embedded_chunk_count = 0,
-          updated_at = NOW()
-      WHERE id = $1
-    `,
-    [documentId],
-  );
+    await client.query("DELETE FROM chunks WHERE document_id = $1", [documentId]);
+    await client.query(
+      `
+        UPDATE documents
+        SET chunk_count = 0,
+            embedded_chunk_count = 0,
+            updated_at = NOW()
+        WHERE id = $1
+      `,
+      [documentId],
+    );
+
+    if (document.has_chunks) {
+      await writeOutboxEvent(client, {
+        eventType: "document_deleted",
+        documentId,
+        workspaceId: document.workspace_id,
+        payload: { documentId },
+      });
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 export async function insertChunks(chunks) {
   if (chunks.length === 0) {
@@ -280,6 +313,13 @@ export async function deleteDocument(documentId, workspaceId, userId) {
         `,
         [workspaceId, userId],
       );
+
+      await writeOutboxEvent(client, {
+        eventType: "document_deleted",
+        documentId,
+        workspaceId,
+        payload: { documentId },
+      });
     }
 
     await client.query("COMMIT");
@@ -288,16 +328,6 @@ export async function deleteDocument(documentId, workspaceId, userId) {
     throw error;
   } finally {
     client.release();
-  }
-
-  try {
-    await deleteDocumentVectors(documentId);
-  } catch (error) {
-    const message = error.data?.status?.error || error.message || "";
-
-    if (!message.toLowerCase().includes("not found")) {
-      throw error;
-    }
   }
 
   if (existingDocument.storage_key) {
