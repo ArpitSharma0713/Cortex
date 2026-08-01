@@ -69,4 +69,27 @@ describe("withTenantContext", () => {
 
     expect(releaseMock).toHaveBeenCalledWith(resetError);
   });
+
+  it("does not leak one user's context into the next pooled request", async () => {
+    let currentUserId;
+    clientQueryMock.mockImplementation(async (sql, params) => {
+      if (sql.includes("set_config")) {
+        currentUserId = params[0];
+      } else if (sql === "RESET app.current_user_id") {
+        currentUserId = undefined;
+      }
+
+      return { rows: [] };
+    });
+
+    await withTenantContext("user-a", async () => {
+      expect(currentUserId).toBe("user-a");
+    });
+    expect(currentUserId).toBeUndefined();
+
+    await withTenantContext("user-b", async () => {
+      expect(currentUserId).toBe("user-b");
+    });
+    expect(currentUserId).toBeUndefined();
+  });
 });
