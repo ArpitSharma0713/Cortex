@@ -1,4 +1,3 @@
-import pool from "../config/db.js";
 import { writeOutboxEvent } from "./outboxService.js";
 import { deleteFromR2 } from "./storageService.js";
 
@@ -30,12 +29,11 @@ const statusExtraColumns = {
 };
 
 export async function createDocument(
+  client,
   workspaceId,
   userId,
   { name, originalFilename, fileSize, mimeType, sha256Hash },
 ) {
-  const client = await pool.connect();
-
   try {
     await client.query("BEGIN");
 
@@ -81,42 +79,48 @@ export async function createDocument(
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
 }
 
-export async function findByHash(workspaceId, hash) {
-  const result = await pool.query(
+export async function findByHash(client, workspaceId, userId, hash) {
+  const result = await client.query(
     `
       SELECT ${documentSelect}
       FROM documents
       WHERE workspace_id = $1
-        AND sha256_hash = $2
+        AND user_id = $2
+        AND sha256_hash = $3
         AND deleted_at IS NULL
     `,
-    [workspaceId, hash],
+    [workspaceId, userId, hash],
   );
 
   return result.rows[0] || null;
 }
 
-export async function setStorageKey(documentId, storageKey) {
-  const result = await pool.query(
+export async function setStorageKey(client, documentId, userId, storageKey) {
+  const result = await client.query(
     `
       UPDATE documents
       SET storage_key = $1,
           updated_at = NOW()
       WHERE id = $2
+        AND user_id = $3
       RETURNING ${documentSelect}
     `,
-    [storageKey, documentId],
+    [storageKey, documentId, userId],
   );
 
   return result.rows[0] || null;
 }
 
-export async function updateDocumentStatus(documentId, status, extra = {}) {
+export async function updateDocumentStatus(
+  client,
+  documentId,
+  userId,
+  status,
+  extra = {},
+) {
   const fields = ["status = $1", "updated_at = NOW()"];
   const params = [status];
 
@@ -129,13 +133,14 @@ export async function updateDocumentStatus(documentId, status, extra = {}) {
     }
   }
 
-  params.push(documentId);
+  params.push(documentId, userId);
 
-  const result = await pool.query(
+  const result = await client.query(
     `
       UPDATE documents
       SET ${fields.join(", ")}
-      WHERE id = $${params.length}
+      WHERE id = $${params.length - 1}
+        AND user_id = $${params.length}
       RETURNING ${documentSelect}
     `,
     params,
@@ -144,9 +149,7 @@ export async function updateDocumentStatus(documentId, status, extra = {}) {
   return result.rows[0] || null;
 }
 
-export async function clearDocumentChunks(documentId) {
-  const client = await pool.connect();
-
+export async function clearDocumentChunks(client, documentId, userId) {
   try {
     await client.query("BEGIN");
 
@@ -158,12 +161,14 @@ export async function clearDocumentChunks(documentId) {
             SELECT 1
             FROM chunks
             WHERE document_id = $1
+              AND user_id = $2
           ) AS has_chunks
         FROM documents
         WHERE id = $1
+          AND user_id = $2
         FOR UPDATE
       `,
-      [documentId],
+      [documentId, userId],
     );
     const document = rows[0];
 
@@ -171,7 +176,10 @@ export async function clearDocumentChunks(documentId) {
       throw new Error("Document not found while clearing chunks");
     }
 
-    await client.query("DELETE FROM chunks WHERE document_id = $1", [documentId]);
+    await client.query(
+      "DELETE FROM chunks WHERE document_id = $1 AND user_id = $2",
+      [documentId, userId],
+    );
     await client.query(
       `
         UPDATE documents
@@ -179,8 +187,9 @@ export async function clearDocumentChunks(documentId) {
             embedded_chunk_count = 0,
             updated_at = NOW()
         WHERE id = $1
+          AND user_id = $2
       `,
-      [documentId],
+      [documentId, userId],
     );
 
     if (document.has_chunks) {
@@ -196,11 +205,9 @@ export async function clearDocumentChunks(documentId) {
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
 }
-export async function insertChunks(chunks) {
+export async function insertChunks(client, chunks) {
   if (chunks.length === 0) {
     return [];
   }
@@ -223,7 +230,7 @@ export async function insertChunks(chunks) {
     chunk.pageNumber,
   ]);
 
-  const result = await pool.query(
+  const result = await client.query(
     `
       INSERT INTO chunks (
         id,
@@ -244,8 +251,8 @@ export async function insertChunks(chunks) {
   return result.rows;
 }
 
-export async function getDocumentsByWorkspace(workspaceId, userId) {
-  const result = await pool.query(
+export async function getDocumentsByWorkspace(client, workspaceId, userId) {
+  const result = await client.query(
     `
       SELECT ${documentSelect}
       FROM documents
@@ -260,8 +267,8 @@ export async function getDocumentsByWorkspace(workspaceId, userId) {
   return result.rows;
 }
 
-export async function getDocumentById(documentId, workspaceId, userId) {
-  const result = await pool.query(
+export async function getDocumentById(client, documentId, workspaceId, userId) {
+  const result = await client.query(
     `
       SELECT ${documentSelect}
       FROM documents
@@ -276,14 +283,17 @@ export async function getDocumentById(documentId, workspaceId, userId) {
   return result.rows[0] || null;
 }
 
-export async function deleteDocument(documentId, workspaceId, userId) {
-  const existingDocument = await getDocumentById(documentId, workspaceId, userId);
+export async function deleteDocument(client, documentId, workspaceId, userId) {
+  const existingDocument = await getDocumentById(
+    client,
+    documentId,
+    workspaceId,
+    userId,
+  );
 
   if (!existingDocument) {
     return false;
   }
-
-  const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
@@ -326,8 +336,6 @@ export async function deleteDocument(documentId, workspaceId, userId) {
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
-  } finally {
-    client.release();
   }
 
   if (existingDocument.storage_key) {
