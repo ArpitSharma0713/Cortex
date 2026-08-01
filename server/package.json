@@ -8,7 +8,8 @@
     "start": "node src/app.js",
     "test": "vitest run",
     "worker": "node worker.js",
-    "worker:dev": "nodemon worker.js"
+    "worker:dev": "nodemon worker.js",
+    "reconcile": "node reconcile.js"
   },
   "keywords": [],
   "author": "",
