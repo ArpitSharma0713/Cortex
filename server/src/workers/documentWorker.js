@@ -1,0 +1,72 @@
+import { randomUUID } from "crypto";
+import { Worker } from "bullmq";
+import { redisConnection } from "../config/redis.js";
+import * as documentService from "../services/documentService.js";
+import { embedDocument } from "../services/embeddingService.js";
+import { downloadFromR2 } from "../services/storageService.js";
+import { chunkText } from "../utils/chunker.js";
+import { extractTextFromBuffer } from "../utils/pdfParser.js";
+import { sanitizeText } from "../utils/sanitize.js";
+
+const CONCURRENCY = Number.parseInt(process.env.DOCUMENT_WORKER_CONCURRENCY || "3", 10);
+
+export async function processDocumentJob(job) {
+  const { documentId, storageKey, workspaceId, userId } = job.data;
+
+  await documentService.updateDocumentStatus(documentId, "processing", {
+    errorMessage: null,
+  });
+
+  const buffer = await downloadFromR2(storageKey);
+  const { text, pageCount } = await extractTextFromBuffer(buffer);
+  const sanitized = sanitizeText(text);
+  const chunks = chunkText(sanitized);
+
+  await documentService.clearDocumentChunks(documentId);
+
+  const chunkRecords = chunks.map((chunk) => ({
+    id: randomUUID(),
+    documentId,
+    workspaceId,
+    userId,
+    chunkIndex: chunk.chunkIndex,
+    content: chunk.content,
+    tokenCount: chunk.tokenCount,
+    pageNumber: null,
+  }));
+
+  await documentService.insertChunks(chunkRecords);
+  const { embedded } = await embedDocument(documentId);
+
+  await documentService.updateDocumentStatus(documentId, "ready", {
+    pageCount,
+    chunkCount: chunks.length,
+    embeddedChunkCount: embedded,
+    errorMessage: null,
+  });
+
+  return { chunkCount: chunks.length, embedded };
+}
+
+export const documentWorker = new Worker("document-processing", processDocumentJob, {
+  connection: redisConnection,
+  concurrency: CONCURRENCY,
+});
+
+documentWorker.on("failed", async (job, error) => {
+  console.error(
+    `Job ${job?.id || "unknown"} failed (attempt ${job?.attemptsMade || 0}):`,
+    error.message,
+  );
+
+  if (job && job.attemptsMade >= (job.opts.attempts || 1)) {
+    await documentService.updateDocumentStatus(job.data.documentId, "failed", {
+      errorMessage: error.message,
+    });
+  }
+});
+
+documentWorker.on("completed", (job) => {
+  console.log(`Job ${job.id} completed:`, job.returnvalue);
+});
+

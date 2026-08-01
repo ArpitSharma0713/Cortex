@@ -5,6 +5,7 @@ import {
   getEmbeddingStatus,
   getDocument,
   listDocuments,
+  retryDocument,
   uploadDocument,
 } from "../controllers/documentController.js";
 import requireAuth from "../middleware/requireAuth.js";
@@ -39,6 +40,7 @@ router.post(
 router.get("/:workspaceId/documents", listDocuments);
 router.get("/:workspaceId/documents/:id/embedding-status", getEmbeddingStatus);
 router.get("/:workspaceId/documents/:id/download", downloadDocument);
+router.post("/:workspaceId/documents/:id/retry", retryDocument);
 router.get("/:workspaceId/documents/:id", getDocument);
 router.delete("/:workspaceId/documents/:id", deleteDocument);
 

@@ -1,3 +1,5 @@
+import { sanitizeText } from "./sanitize.js";
+
 const CHUNK_SIZE = 512;
 const CHUNK_OVERLAP = 50;
 const CHARS_PER_TOKEN = 4;
@@ -9,8 +11,7 @@ export function chunkText(text, options = {}) {
   const chunkSizeChars = chunkSize * CHARS_PER_TOKEN;
   const overlapChars = overlap * CHARS_PER_TOKEN;
 
-  const cleaned = text
-    .replace(/\u0000/g, "")
+  const cleaned = sanitizeText(text)
     .replace(/[\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "")
     .replace(/\r\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
@@ -56,3 +57,4 @@ export function chunkText(text, options = {}) {
 
   return chunks;
 }
+

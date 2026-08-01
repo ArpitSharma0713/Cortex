@@ -28,6 +28,7 @@ export default function DocumentSidebar({
   const [documents, setDocuments] = useState([]);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [retryingDocumentId, setRetryingDocumentId] = useState("");
 
   async function downloadDocument(document) {
     try {
@@ -52,6 +53,28 @@ export default function DocumentSidebar({
       } else {
         setError("Could not download document");
       }
+    }
+  }
+
+  async function retryDocument(document) {
+    setRetryingDocumentId(document.id);
+    setError("");
+
+    try {
+      await api.post(
+        `/workspaces/${workspaceId}/documents/${document.id}/retry`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      await fetchDocuments({ quiet: true });
+    } catch (requestError) {
+      if (requestError.response?.status === 401) {
+        onUnauthorized?.();
+      } else {
+        setError(requestError.response?.data?.error || "Could not retry document");
+      }
+    } finally {
+      setRetryingDocumentId("");
     }
   }
 
@@ -118,6 +141,16 @@ export default function DocumentSidebar({
             </div>
             {document.errorMessage && (
               <p className="form-error">{document.errorMessage}</p>
+            )}
+            {document.status === "failed" && document.storageKey && (
+              <button
+                className="document-download-button"
+                disabled={retryingDocumentId === document.id}
+                onClick={() => retryDocument(document)}
+                type="button"
+              >
+                {retryingDocumentId === document.id ? "Retrying..." : "Retry"}
+              </button>
             )}
             {document.storageKey && (
               <button

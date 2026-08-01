@@ -1,6 +1,8 @@
-import { v4 as uuidv4 } from "uuid";
+import {
+  enqueueDocumentProcessing,
+  retryDocumentProcessing,
+} from "../queues/documentQueue.js";
 import * as documentService from "../services/documentService.js";
-import { embedDocument } from "../services/embeddingService.js";
 import {
   buildStorageKey,
   computeHash,
@@ -8,8 +10,6 @@ import {
   uploadToR2,
 } from "../services/storageService.js";
 import * as workspaceService from "../services/workspaceService.js";
-import { chunkText } from "../utils/chunker.js";
-import { extractTextFromBuffer } from "../utils/pdfParser.js";
 
 function formatDocument(document) {
   return {
@@ -50,6 +50,8 @@ async function assertWorkspaceOwner(workspaceId, userId) {
 }
 
 export async function uploadDocument(req, res, next) {
+  let document;
+
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No file provided" });
@@ -70,7 +72,7 @@ export async function uploadDocument(req, res, next) {
       });
     }
 
-    const document = await documentService.createDocument(
+    document = await documentService.createDocument(
       req.params.workspaceId,
       req.user.id,
       {
@@ -82,69 +84,34 @@ export async function uploadDocument(req, res, next) {
       },
     );
 
-    res.status(202).json({
-      documentId: document.id,
-      status: "pending",
-      message: "Document received, processing started",
-    });
-
-    processDocument(
+    const storageKey = buildStorageKey(
+      req.params.workspaceId,
       document.id,
-      req.file.buffer,
+      req.file.originalname,
+    );
+
+    await uploadToR2(storageKey, req.file.buffer, req.file.mimetype);
+    await documentService.setStorageKey(document.id, storageKey);
+    await enqueueDocumentProcessing(
+      document.id,
+      storageKey,
       req.params.workspaceId,
       req.user.id,
-      req.file.originalname,
-      req.file.mimetype,
-    ).catch((error) =>
-      console.error(`Processing failed for ${document.id}:`, error),
     );
+
+    return res.status(202).json({
+      documentId: document.id,
+      status: "pending",
+      message: "Document received, queued for processing",
+    });
   } catch (error) {
+    if (document) {
+      await documentService
+        .updateDocumentStatus(document.id, "failed", { errorMessage: error.message })
+        .catch(() => {});
+    }
+
     return next(error);
-  }
-}
-
-async function processDocument(
-  documentId,
-  buffer,
-  workspaceId,
-  userId,
-  originalFilename,
-  mimeType,
-) {
-  await documentService.updateDocumentStatus(documentId, "processing");
-
-  try {
-    const storageKey = buildStorageKey(workspaceId, documentId, originalFilename);
-    await uploadToR2(storageKey, buffer, mimeType);
-    await documentService.setStorageKey(documentId, storageKey);
-
-    const { text, pageCount } = await extractTextFromBuffer(buffer);
-    const chunks = chunkText(text);
-
-    const chunkRecords = chunks.map((chunk) => ({
-      id: uuidv4(),
-      documentId,
-      workspaceId,
-      userId,
-      chunkIndex: chunk.chunkIndex,
-      content: chunk.content,
-      tokenCount: chunk.tokenCount,
-      pageNumber: null,
-    }));
-
-    await documentService.insertChunks(chunkRecords);
-    const { embedded } = await embedDocument(documentId);
-
-    await documentService.updateDocumentStatus(documentId, "ready", {
-      pageCount,
-      chunkCount: chunks.length,
-      embeddedChunkCount: embedded,
-    });
-  } catch (error) {
-    await documentService.updateDocumentStatus(documentId, "failed", {
-      errorMessage: error.message,
-    });
-    throw error;
   }
 }
 
@@ -249,6 +216,47 @@ export async function downloadDocument(req, res, next) {
   }
 }
 
+export async function retryDocument(req, res, next) {
+  try {
+    await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
+
+    const document = await documentService.getDocumentById(
+      req.params.id,
+      req.params.workspaceId,
+      req.user.id,
+    );
+
+    if (!document) {
+      throw createError(404, "Document not found");
+    }
+
+    if (document.status !== "failed") {
+      return res.status(400).json({ error: "Only failed documents can be retried" });
+    }
+
+    if (!document.storage_key) {
+      return res.status(400).json({ error: "No stored file to retry from" });
+    }
+
+    await retryDocumentProcessing(
+      document.id,
+      document.storage_key,
+      req.params.workspaceId,
+      req.user.id,
+    );
+    await documentService.updateDocumentStatus(document.id, "pending", {
+      errorMessage: null,
+    });
+
+    return res.status(202).json({
+      documentId: document.id,
+      status: "pending",
+      message: "Retry queued",
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
 export async function deleteDocument(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
