@@ -10,6 +10,7 @@ import {
   uploadToR2,
 } from "../services/storageService.js";
 import * as workspaceService from "../services/workspaceService.js";
+import { withTenantContext } from "../middleware/withTenantContext.js";
 
 function formatDocument(document) {
   return {
@@ -60,29 +61,42 @@ export async function uploadDocument(req, res, next) {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
     const hash = computeHash(req.file.buffer);
-    const existingDocument = await documentService.findByHash(
-      req.params.workspaceId,
-      hash,
-    );
+    const lookup = await withTenantContext(req.user.id, async (client) => {
+      const existingDocument = await documentService.findByHash(
+        client,
+        req.params.workspaceId,
+        req.user.id,
+        hash,
+      );
 
-    if (existingDocument) {
+      if (existingDocument) {
+        return { existingDocument };
+      }
+
+      const createdDocument = await documentService.createDocument(
+        client,
+        req.params.workspaceId,
+        req.user.id,
+        {
+          name: req.body.name || req.file.originalname,
+          originalFilename: req.file.originalname,
+          fileSize: req.file.size,
+          mimeType: req.file.mimetype,
+          sha256Hash: hash,
+        },
+      );
+
+      return { createdDocument };
+    });
+
+    if (lookup.existingDocument) {
       return res.status(409).json({
         error: "This file has already been uploaded to this workspace",
-        documentId: existingDocument.id,
+        documentId: lookup.existingDocument.id,
       });
     }
 
-    document = await documentService.createDocument(
-      req.params.workspaceId,
-      req.user.id,
-      {
-        name: req.body.name || req.file.originalname,
-        originalFilename: req.file.originalname,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
-        sha256Hash: hash,
-      },
-    );
+    document = lookup.createdDocument;
 
     const storageKey = buildStorageKey(
       req.params.workspaceId,
@@ -91,7 +105,14 @@ export async function uploadDocument(req, res, next) {
     );
 
     await uploadToR2(storageKey, req.file.buffer, req.file.mimetype);
-    await documentService.setStorageKey(document.id, storageKey);
+    await withTenantContext(req.user.id, (client) =>
+      documentService.setStorageKey(
+        client,
+        document.id,
+        req.user.id,
+        storageKey,
+      ),
+    );
     await enqueueDocumentProcessing(
       document.id,
       storageKey,
@@ -106,8 +127,15 @@ export async function uploadDocument(req, res, next) {
     });
   } catch (error) {
     if (document) {
-      await documentService
-        .updateDocumentStatus(document.id, "failed", { errorMessage: error.message })
+      await withTenantContext(req.user.id, (client) =>
+        documentService.updateDocumentStatus(
+          client,
+          document.id,
+          req.user.id,
+          "failed",
+          { errorMessage: error.message },
+        ),
+      )
         .catch(() => {});
     }
 
@@ -123,10 +151,13 @@ export async function getEmbeddingStatus(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
-    const document = await documentService.getDocumentById(
-      req.params.id,
-      req.params.workspaceId,
-      req.user.id,
+    const document = await withTenantContext(req.user.id, (client) =>
+      documentService.getDocumentById(
+        client,
+        req.params.id,
+        req.params.workspaceId,
+        req.user.id,
+      ),
     );
 
     if (!document) {
@@ -154,9 +185,12 @@ export async function listDocuments(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
-    const documents = await documentService.getDocumentsByWorkspace(
-      req.params.workspaceId,
-      req.user.id,
+    const documents = await withTenantContext(req.user.id, (client) =>
+      documentService.getDocumentsByWorkspace(
+        client,
+        req.params.workspaceId,
+        req.user.id,
+      ),
     );
 
     return res.status(200).json({
@@ -172,10 +206,13 @@ export async function getDocument(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
-    const document = await documentService.getDocumentById(
-      req.params.id,
-      req.params.workspaceId,
-      req.user.id,
+    const document = await withTenantContext(req.user.id, (client) =>
+      documentService.getDocumentById(
+        client,
+        req.params.id,
+        req.params.workspaceId,
+        req.user.id,
+      ),
     );
 
     if (!document) {
@@ -192,10 +229,13 @@ export async function downloadDocument(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
-    const document = await documentService.getDocumentById(
-      req.params.id,
-      req.params.workspaceId,
-      req.user.id,
+    const document = await withTenantContext(req.user.id, (client) =>
+      documentService.getDocumentById(
+        client,
+        req.params.id,
+        req.params.workspaceId,
+        req.user.id,
+      ),
     );
 
     if (!document || !document.storage_key) {
@@ -220,10 +260,13 @@ export async function retryDocument(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
-    const document = await documentService.getDocumentById(
-      req.params.id,
-      req.params.workspaceId,
-      req.user.id,
+    const document = await withTenantContext(req.user.id, (client) =>
+      documentService.getDocumentById(
+        client,
+        req.params.id,
+        req.params.workspaceId,
+        req.user.id,
+      ),
     );
 
     if (!document) {
@@ -244,9 +287,15 @@ export async function retryDocument(req, res, next) {
       req.params.workspaceId,
       req.user.id,
     );
-    await documentService.updateDocumentStatus(document.id, "pending", {
-      errorMessage: null,
-    });
+    await withTenantContext(req.user.id, (client) =>
+      documentService.updateDocumentStatus(
+        client,
+        document.id,
+        req.user.id,
+        "pending",
+        { errorMessage: null },
+      ),
+    );
 
     return res.status(202).json({
       documentId: document.id,
@@ -261,10 +310,13 @@ export async function deleteDocument(req, res, next) {
   try {
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
 
-    const wasDeleted = await documentService.deleteDocument(
-      req.params.id,
-      req.params.workspaceId,
-      req.user.id,
+    const wasDeleted = await withTenantContext(req.user.id, (client) =>
+      documentService.deleteDocument(
+        client,
+        req.params.id,
+        req.params.workspaceId,
+        req.user.id,
+      ),
     );
 
     if (!wasDeleted) {
