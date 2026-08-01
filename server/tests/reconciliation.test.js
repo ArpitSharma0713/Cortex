@@ -41,6 +41,9 @@ describe("runReconciliation", () => {
       checked: 2,
       missing: 0,
     });
+    expect(poolQueryMock).toHaveBeenCalledWith(
+      expect.stringContaining("documents.deleted_at IS NULL"),
+    );
     expect(qdrantRetrieveMock).toHaveBeenCalledWith("test-chunks", {
       ids: ["chunk-1", "chunk-2"],
     });

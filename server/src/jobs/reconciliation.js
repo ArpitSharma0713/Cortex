@@ -15,10 +15,12 @@ export async function runReconciliation() {
 
   const { rows: embeddedChunks } = await pool.query(
     `
-      SELECT id, document_id
+      SELECT chunks.id, chunks.document_id
       FROM chunks
-      WHERE is_embedded = TRUE
-      ORDER BY id
+      INNER JOIN documents ON documents.id = chunks.document_id
+      WHERE chunks.is_embedded = TRUE
+        AND documents.deleted_at IS NULL
+      ORDER BY chunks.id
     `,
   );
   const missingFromQdrant = [];
