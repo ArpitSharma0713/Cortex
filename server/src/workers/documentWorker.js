@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { Worker } from "bullmq";
 import { redisConnection } from "../config/redis.js";
+import { withTenantContext } from "../middleware/withTenantContext.js";
 import * as documentService from "../services/documentService.js";
 import { embedDocument } from "../services/embeddingService.js";
 import { downloadFromR2 } from "../services/storageService.js";
@@ -13,16 +14,20 @@ const CONCURRENCY = Number.parseInt(process.env.DOCUMENT_WORKER_CONCURRENCY || "
 export async function processDocumentJob(job) {
   const { documentId, storageKey, workspaceId, userId } = job.data;
 
-  await documentService.updateDocumentStatus(documentId, "processing", {
-    errorMessage: null,
-  });
+  await withTenantContext(userId, (client) =>
+    documentService.updateDocumentStatus(
+      client,
+      documentId,
+      userId,
+      "processing",
+      { errorMessage: null },
+    ),
+  );
 
   const buffer = await downloadFromR2(storageKey);
   const { text, pageCount } = await extractTextFromBuffer(buffer);
   const sanitized = sanitizeText(text);
   const chunks = chunkText(sanitized);
-
-  await documentService.clearDocumentChunks(documentId);
 
   const chunkRecords = chunks.map((chunk) => ({
     id: randomUUID(),
@@ -35,15 +40,20 @@ export async function processDocumentJob(job) {
     pageNumber: null,
   }));
 
-  await documentService.insertChunks(chunkRecords);
-  const { embedded } = await embedDocument(documentId);
-
-  await documentService.updateDocumentStatus(documentId, "ready", {
-    pageCount,
-    chunkCount: chunks.length,
-    embeddedChunkCount: embedded,
-    errorMessage: null,
+  await withTenantContext(userId, async (client) => {
+    await documentService.clearDocumentChunks(client, documentId, userId);
+    await documentService.insertChunks(client, chunkRecords);
   });
+  const { embedded } = await embedDocument(documentId, userId);
+
+  await withTenantContext(userId, (client) =>
+    documentService.updateDocumentStatus(client, documentId, userId, "ready", {
+      pageCount,
+      chunkCount: chunks.length,
+      embeddedChunkCount: embedded,
+      errorMessage: null,
+    }),
+  );
 
   return { chunkCount: chunks.length, embedded };
 }
@@ -60,9 +70,15 @@ documentWorker.on("failed", async (job, error) => {
   );
 
   if (job && job.attemptsMade >= (job.opts.attempts || 1)) {
-    await documentService.updateDocumentStatus(job.data.documentId, "failed", {
-      errorMessage: error.message,
-    });
+    await withTenantContext(job.data.userId, (client) =>
+      documentService.updateDocumentStatus(
+        client,
+        job.data.documentId,
+        job.data.userId,
+        "failed",
+        { errorMessage: error.message },
+      ),
+    );
   }
 });
 

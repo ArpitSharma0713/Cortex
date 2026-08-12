@@ -6,7 +6,9 @@ const {
   embedDocumentMock,
   extractTextFromBufferMock,
   insertChunksMock,
+  tenantClient,
   updateDocumentStatusMock,
+  withTenantContextMock,
   workerOnMock,
 } = vi.hoisted(() => ({
   clearDocumentChunksMock: vi.fn().mockResolvedValue(undefined),
@@ -17,7 +19,9 @@ const {
     pageCount: 2,
   }),
   insertChunksMock: vi.fn().mockResolvedValue([{ id: "chunk-1" }]),
+  tenantClient: { query: vi.fn() },
   updateDocumentStatusMock: vi.fn().mockResolvedValue(undefined),
+  withTenantContextMock: vi.fn(),
   workerOnMock: vi.fn(),
 }));
 
@@ -29,6 +33,10 @@ vi.mock("bullmq", () => ({
 
 vi.mock("../src/config/redis.js", () => ({
   redisConnection: {},
+}));
+
+vi.mock("../src/middleware/withTenantContext.js", () => ({
+  withTenantContext: withTenantContextMock,
 }));
 
 vi.mock("../src/services/documentService.js", () => ({
@@ -59,6 +67,10 @@ const { processDocumentJob } = await import("../src/workers/documentWorker.js");
 
 describe("processDocumentJob", () => {
   it("downloads the stored PDF and marks the document ready", async () => {
+    withTenantContextMock.mockImplementation(async (_userId, callback) =>
+      callback(tenantClient),
+    );
+
     const result = await processDocumentJob({
       data: {
         documentId: "doc-1",
@@ -69,24 +81,41 @@ describe("processDocumentJob", () => {
     });
 
     expect(downloadFromR2Mock).toHaveBeenCalledWith("storage/key.pdf");
-    expect(clearDocumentChunksMock).toHaveBeenCalledWith("doc-1");
-    expect(insertChunksMock).toHaveBeenCalledWith([
-      expect.objectContaining({
-        documentId: "doc-1",
-        workspaceId: "ws-1",
-        userId: "user-1",
-        chunkIndex: 0,
-        content: "hello world",
-        tokenCount: 3,
-      }),
-    ]);
-    expect(embedDocumentMock).toHaveBeenCalledWith("doc-1");
-    expect(updateDocumentStatusMock).toHaveBeenLastCalledWith("doc-1", "ready", {
-      pageCount: 2,
-      chunkCount: 1,
-      embeddedChunkCount: 1,
-      errorMessage: null,
-    });
+    expect(clearDocumentChunksMock).toHaveBeenCalledWith(
+      tenantClient,
+      "doc-1",
+      "user-1",
+    );
+    expect(insertChunksMock).toHaveBeenCalledWith(
+      tenantClient,
+      [
+        expect.objectContaining({
+          documentId: "doc-1",
+          workspaceId: "ws-1",
+          userId: "user-1",
+          chunkIndex: 0,
+          content: "hello world",
+          tokenCount: 3,
+        }),
+      ],
+    );
+    expect(embedDocumentMock).toHaveBeenCalledWith("doc-1", "user-1");
+    expect(updateDocumentStatusMock).toHaveBeenLastCalledWith(
+      tenantClient,
+      "doc-1",
+      "user-1",
+      "ready",
+      {
+        pageCount: 2,
+        chunkCount: 1,
+        embeddedChunkCount: 1,
+        errorMessage: null,
+      },
+    );
+    expect(withTenantContextMock).toHaveBeenCalledWith(
+      "user-1",
+      expect.any(Function),
+    );
     expect(result).toEqual({ chunkCount: 1, embedded: 1 });
   });
 });

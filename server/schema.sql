@@ -166,3 +166,26 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 
 CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox_events(status);
 CREATE INDEX IF NOT EXISTS idx_outbox_created_at ON outbox_events(created_at);
+
+-- From Phase 2 A5: database-enforced tenant isolation for document content
+CREATE OR REPLACE FUNCTION public.current_user_id() RETURNS UUID AS $$
+  SELECT NULLIF(current_setting('app.current_user_id', true), '')::UUID
+$$ LANGUAGE SQL STABLE;
+
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE documents FORCE ROW LEVEL SECURITY;
+
+ALTER TABLE chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chunks FORCE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS tenant_isolation_documents ON documents;
+CREATE POLICY tenant_isolation_documents ON documents
+  FOR ALL
+  USING (user_id = public.current_user_id())
+  WITH CHECK (user_id = public.current_user_id());
+
+DROP POLICY IF EXISTS tenant_isolation_chunks ON chunks;
+CREATE POLICY tenant_isolation_chunks ON chunks
+  FOR ALL
+  USING (user_id = public.current_user_id())
+  WITH CHECK (user_id = public.current_user_id());

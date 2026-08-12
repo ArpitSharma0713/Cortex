@@ -2,25 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   clientQueryMock,
-  connectMock,
   deleteFromR2Mock,
-  poolQueryMock,
-  releaseMock,
   writeOutboxEventMock,
 } = vi.hoisted(() => ({
   clientQueryMock: vi.fn(),
-  connectMock: vi.fn(),
   deleteFromR2Mock: vi.fn(),
-  poolQueryMock: vi.fn(),
-  releaseMock: vi.fn(),
   writeOutboxEventMock: vi.fn(),
-}));
-
-vi.mock("../src/config/db.js", () => ({
-  default: {
-    connect: connectMock,
-    query: poolQueryMock,
-  },
 }));
 
 vi.mock("../src/services/outboxService.js", () => ({
@@ -31,20 +18,16 @@ vi.mock("../src/services/storageService.js", () => ({
   deleteFromR2: deleteFromR2Mock,
 }));
 
-const { clearDocumentChunks, deleteDocument } = await import(
+const { clearDocumentChunks, deleteDocument, updateDocumentStatus } = await import(
   "../src/services/documentService.js"
 );
+
+const client = { query: clientQueryMock };
 
 describe("documentService outbox writes", () => {
   beforeEach(() => {
     clientQueryMock.mockReset().mockResolvedValue({ rowCount: 1, rows: [] });
-    connectMock.mockReset().mockResolvedValue({
-      query: clientQueryMock,
-      release: releaseMock,
-    });
     deleteFromR2Mock.mockReset().mockResolvedValue(undefined);
-    poolQueryMock.mockReset();
-    releaseMock.mockReset();
     writeOutboxEventMock.mockReset().mockResolvedValue(undefined);
   });
 
@@ -60,7 +43,7 @@ describe("documentService outbox writes", () => {
       return { rowCount: 1, rows: [] };
     });
 
-    await clearDocumentChunks("doc-1");
+    await clearDocumentChunks(client, "doc-1", "user-1");
 
     expect(writeOutboxEventMock).toHaveBeenCalledWith(
       expect.objectContaining({ query: clientQueryMock }),
@@ -72,21 +55,22 @@ describe("documentService outbox writes", () => {
       },
     );
     expect(clientQueryMock).toHaveBeenLastCalledWith("COMMIT");
-    expect(releaseMock).toHaveBeenCalledOnce();
   });
 
   it("queues vector deletion with the document soft delete", async () => {
-    poolQueryMock.mockResolvedValueOnce({
-      rows: [
-        {
+    clientQueryMock.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT") && sql.includes("original_filename")) {
+        return {
+          rowCount: 1,
+          rows: [{
           id: "doc-2",
           workspace_id: "ws-2",
           user_id: "user-2",
           storage_key: "stored/doc-2.pdf",
-        },
-      ],
-    });
-    clientQueryMock.mockImplementation(async (sql) => {
+          }],
+        };
+      }
+
       if (sql.includes("UPDATE documents") && sql.includes("RETURNING id")) {
         return { rowCount: 1, rows: [{ id: "doc-2" }] };
       }
@@ -94,7 +78,9 @@ describe("documentService outbox writes", () => {
       return { rowCount: 1, rows: [] };
     });
 
-    await expect(deleteDocument("doc-2", "ws-2", "user-2")).resolves.toBe(true);
+    await expect(
+      deleteDocument(client, "doc-2", "ws-2", "user-2"),
+    ).resolves.toBe(true);
 
     expect(writeOutboxEventMock).toHaveBeenCalledWith(
       expect.objectContaining({ query: clientQueryMock }),
@@ -110,10 +96,14 @@ describe("documentService outbox writes", () => {
   });
 
   it("rolls back a document delete when the outbox write fails", async () => {
-    poolQueryMock.mockResolvedValueOnce({
-      rows: [{ id: "doc-3", workspace_id: "ws-3", user_id: "user-3" }],
-    });
     clientQueryMock.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT") && sql.includes("original_filename")) {
+        return {
+          rowCount: 1,
+          rows: [{ id: "doc-3", workspace_id: "ws-3", user_id: "user-3" }],
+        };
+      }
+
       if (sql.includes("UPDATE documents") && sql.includes("RETURNING id")) {
         return { rowCount: 1, rows: [{ id: "doc-3" }] };
       }
@@ -122,11 +112,20 @@ describe("documentService outbox writes", () => {
     });
     writeOutboxEventMock.mockRejectedValueOnce(new Error("outbox unavailable"));
 
-    await expect(deleteDocument("doc-3", "ws-3", "user-3")).rejects.toThrow(
-      "outbox unavailable",
-    );
+    await expect(
+      deleteDocument(client, "doc-3", "ws-3", "user-3"),
+    ).rejects.toThrow("outbox unavailable");
 
     expect(clientQueryMock).toHaveBeenLastCalledWith("ROLLBACK");
     expect(deleteFromR2Mock).not.toHaveBeenCalled();
+  });
+
+  it("keeps an application-level owner filter on status updates", async () => {
+    await updateDocumentStatus(client, "doc-4", "user-4", "processing");
+
+    expect(clientQueryMock).toHaveBeenCalledWith(
+      expect.stringMatching(/WHERE id = \$2\s+AND user_id = \$3/),
+      ["processing", "doc-4", "user-4"],
+    );
   });
 });

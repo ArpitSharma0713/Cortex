@@ -1,5 +1,6 @@
 import pool from "../config/db.js";
 import { qdrant } from "../config/qdrant.js";
+import { withTenantContext } from "../middleware/withTenantContext.js";
 
 const RECONCILIATION_BATCH_SIZE = Number.parseInt(
   process.env.RECONCILIATION_BATCH_SIZE || "100",
@@ -13,16 +14,31 @@ function collectionName() {
 export async function runReconciliation() {
   console.log("Running reconciliation check...");
 
-  const { rows: embeddedChunks } = await pool.query(
-    `
-      SELECT chunks.id, chunks.document_id
-      FROM chunks
-      INNER JOIN documents ON documents.id = chunks.document_id
-      WHERE chunks.is_embedded = TRUE
-        AND documents.deleted_at IS NULL
-      ORDER BY chunks.id
-    `,
-  );
+  const { rows: users } = await pool.query("SELECT id FROM users ORDER BY id");
+  const embeddedChunks = [];
+
+  for (const user of users) {
+    const tenantChunks = await withTenantContext(user.id, async (client) => {
+      const { rows } = await client.query(
+        `
+          SELECT chunks.id, chunks.document_id
+          FROM chunks
+          INNER JOIN documents ON documents.id = chunks.document_id
+          WHERE chunks.user_id = $1
+            AND documents.user_id = $1
+            AND chunks.is_embedded = TRUE
+            AND documents.deleted_at IS NULL
+          ORDER BY chunks.id
+        `,
+        [user.id],
+      );
+
+      return rows;
+    });
+
+    embeddedChunks.push(...tenantChunks);
+  }
+
   const missingFromQdrant = [];
 
   for (

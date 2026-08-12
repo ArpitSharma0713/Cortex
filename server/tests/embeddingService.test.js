@@ -2,27 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   clientQueryMock,
-  connectMock,
   embedTextsMock,
-  poolQueryMock,
   qdrantUpsertMock,
-  releaseMock,
+  withTenantContextMock,
   writeOutboxEventMock,
 } = vi.hoisted(() => ({
   clientQueryMock: vi.fn(),
-  connectMock: vi.fn(),
   embedTextsMock: vi.fn(),
-  poolQueryMock: vi.fn(),
   qdrantUpsertMock: vi.fn(),
-  releaseMock: vi.fn(),
+  withTenantContextMock: vi.fn(),
   writeOutboxEventMock: vi.fn(),
 }));
 
-vi.mock("../src/config/db.js", () => ({
-  default: {
-    connect: connectMock,
-    query: poolQueryMock,
-  },
+vi.mock("../src/middleware/withTenantContext.js", () => ({
+  withTenantContext: withTenantContextMock,
 }));
 
 vi.mock("../src/config/qdrant.js", () => ({
@@ -56,28 +49,36 @@ const chunk = {
 describe("embedDocument", () => {
   beforeEach(() => {
     clientQueryMock.mockReset().mockResolvedValue({ rowCount: 1 });
-    connectMock.mockReset().mockResolvedValue({
-      query: clientQueryMock,
-      release: releaseMock,
-    });
     embedTextsMock.mockReset().mockResolvedValue([[0.1, 0.2]]);
-    poolQueryMock.mockReset();
     qdrantUpsertMock.mockReset();
-    releaseMock.mockReset();
+    withTenantContextMock
+      .mockReset()
+      .mockImplementation(async (_userId, callback) =>
+        callback({ query: clientQueryMock }),
+      );
     writeOutboxEventMock.mockReset().mockResolvedValue(undefined);
   });
 
   it("commits chunk state and vector payload through the same transaction", async () => {
-    poolQueryMock
-      .mockResolvedValueOnce({ rows: [chunk] })
-      .mockResolvedValueOnce({ rows: [{ embedded_chunk_count: 1 }] });
+    clientQueryMock.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT *") && sql.includes("FROM chunks")) {
+        return { rows: [chunk] };
+      }
 
-    await expect(embedDocument(chunk.document_id)).resolves.toEqual({ embedded: 1 });
+      if (sql.includes("SELECT embedded_chunk_count")) {
+        return { rows: [{ embedded_chunk_count: 1 }] };
+      }
 
-    expect(clientQueryMock).toHaveBeenNthCalledWith(1, "BEGIN");
+      return { rowCount: 1, rows: [] };
+    });
+
+    await expect(
+      embedDocument(chunk.document_id, chunk.user_id),
+    ).resolves.toEqual({ embedded: 1 });
+
     expect(clientQueryMock).toHaveBeenCalledWith(
       expect.stringContaining("SET is_embedded = TRUE"),
-      [[chunk.id]],
+      [[chunk.id], chunk.user_id],
     );
     expect(writeOutboxEventMock).toHaveBeenCalledWith(
       expect.objectContaining({ query: clientQueryMock }),
@@ -95,20 +96,28 @@ describe("embedDocument", () => {
         },
       }),
     );
-    expect(clientQueryMock).toHaveBeenLastCalledWith("COMMIT");
+    expect(clientQueryMock).toHaveBeenCalledWith("COMMIT");
     expect(qdrantUpsertMock).not.toHaveBeenCalled();
-    expect(releaseMock).toHaveBeenCalledOnce();
+    expect(withTenantContextMock).toHaveBeenCalledWith(
+      chunk.user_id,
+      expect.any(Function),
+    );
   });
 
   it("rolls back chunk state when the outbox write fails", async () => {
-    poolQueryMock.mockResolvedValueOnce({ rows: [chunk] });
+    clientQueryMock.mockImplementation(async (sql) => {
+      if (sql.includes("SELECT *") && sql.includes("FROM chunks")) {
+        return { rows: [chunk] };
+      }
+
+      return { rowCount: 1, rows: [] };
+    });
     writeOutboxEventMock.mockRejectedValueOnce(new Error("outbox unavailable"));
 
-    await expect(embedDocument(chunk.document_id)).rejects.toThrow(
-      "outbox unavailable",
-    );
+    await expect(
+      embedDocument(chunk.document_id, chunk.user_id),
+    ).rejects.toThrow("outbox unavailable");
 
     expect(clientQueryMock).toHaveBeenLastCalledWith("ROLLBACK");
-    expect(releaseMock).toHaveBeenCalledOnce();
   });
 });
