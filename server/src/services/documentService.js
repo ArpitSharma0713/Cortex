@@ -214,8 +214,8 @@ export async function insertChunks(client, chunks) {
 
   const values = chunks
     .map((chunk, index) => {
-      const offset = index * 8;
-      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8})`;
+      const offset = index * 9;
+      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`;
     })
     .join(", ");
 
@@ -228,6 +228,7 @@ export async function insertChunks(client, chunks) {
     chunk.content,
     chunk.tokenCount,
     chunk.pageNumber,
+    chunk.flaggedPatterns,
   ]);
 
   const result = await client.query(
@@ -240,7 +241,8 @@ export async function insertChunks(client, chunks) {
         chunk_index,
         content,
         token_count,
-        page_number
+        page_number,
+        flagged_patterns
       )
       VALUES ${values}
       RETURNING id
