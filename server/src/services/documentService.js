@@ -285,6 +285,21 @@ export async function getDocumentById(client, documentId, workspaceId, userId) {
   return result.rows[0] || null;
 }
 
+export async function getUploadCountToday(client, userId) {
+  const { rows } = await client.query(
+    `
+      SELECT COUNT(*)::int AS count
+      FROM documents
+      WHERE user_id = $1
+        AND created_at >= CURRENT_DATE
+        AND status != 'failed'
+    `,
+    [userId],
+  );
+
+  return rows[0].count;
+}
+
 export async function deleteDocument(client, documentId, workspaceId, userId) {
   const existingDocument = await getDocumentById(
     client,

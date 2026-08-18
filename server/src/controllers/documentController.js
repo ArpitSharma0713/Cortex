@@ -12,6 +12,8 @@ import {
 import * as workspaceService from "../services/workspaceService.js";
 import { withTenantContext } from "../middleware/withTenantContext.js";
 
+const DAILY_UPLOAD_LIMIT = 20;
+
 function formatDocument(document) {
   return {
     id: document.id,
@@ -59,6 +61,17 @@ export async function uploadDocument(req, res, next) {
     }
 
     await assertWorkspaceOwner(req.params.workspaceId, req.user.id);
+
+    const uploadCount = await withTenantContext(req.user.id, (client) =>
+      documentService.getUploadCountToday(client, req.user.id),
+    );
+
+    if (uploadCount >= DAILY_UPLOAD_LIMIT) {
+      return res.status(429).json({
+        error: "Daily upload limit reached",
+        limit: DAILY_UPLOAD_LIMIT,
+      });
+    }
 
     const hash = computeHash(req.file.buffer);
     const lookup = await withTenantContext(req.user.id, async (client) => {
