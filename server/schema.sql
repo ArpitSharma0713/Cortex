@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   token_count INTEGER NOT NULL,
   page_number INTEGER,
   is_embedded BOOLEAN DEFAULT FALSE,
+  flagged_patterns TEXT[],
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
