@@ -55,6 +55,17 @@ function clearRefreshCookie(res) {
   });
 }
 
+async function authenticateCredentials(email, password) {
+  const user = await findUserByEmail(email);
+
+  if (!user?.password_hash) {
+    return null;
+  }
+
+  const passwordMatches = await comparePassword(password, user.password_hash);
+  return passwordMatches ? user : null;
+}
+
 export async function register(req, res, next) {
   try {
     const { email, password, fullName } = req.body;
@@ -74,18 +85,25 @@ export async function register(req, res, next) {
   }
 }
 
+export async function checkLoginCredentials(req, res, next) {
+  try {
+    req.loginUser = await authenticateCredentials(
+      req.body.email,
+      req.body.password,
+    );
+    return next();
+  } catch (error) {
+    return next(error);
+  }
+}
+
 export async function login(req, res, next) {
   try {
-    const { email, password } = req.body;
-    const user = await findUserByEmail(email);
+    const user = Object.hasOwn(req, "loginUser")
+      ? req.loginUser
+      : await authenticateCredentials(req.body.email, req.body.password);
 
-    if (!user?.password_hash) {
-      throw createError(401, "Invalid credentials");
-    }
-
-    const passwordMatches = await comparePassword(password, user.password_hash);
-
-    if (!passwordMatches) {
+    if (!user) {
       throw createError(401, "Invalid credentials");
     }
 

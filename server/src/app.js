@@ -5,10 +5,13 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import errorHandler from "./middleware/errorHandler.js";
+import { globalLimiter } from "./middleware/rateLimiters.js";
 import validateEnv from "./config/validateEnv.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+app.set("trust proxy", 1);
 
 try {
   validateEnv();
@@ -33,6 +36,7 @@ app.use(
     credentials: true,
   }),
 );
+app.use(globalLimiter);
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(cookieParser());
