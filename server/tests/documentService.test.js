@@ -21,6 +21,7 @@ vi.mock("../src/services/storageService.js", () => ({
 const {
   clearDocumentChunks,
   deleteDocument,
+  getUploadCountToday,
   insertChunks,
   updateDocumentStatus,
 } = await import("../src/services/documentService.js");
@@ -160,6 +161,19 @@ describe("documentService outbox writes", () => {
         null,
         ["ignore previous instructions"],
       ],
+    );
+  });
+
+  it("counts only today's non-failed uploads for the current tenant", async () => {
+    clientQueryMock.mockResolvedValueOnce({ rows: [{ count: 7 }] });
+
+    await expect(getUploadCountToday(client, "user-7")).resolves.toBe(7);
+
+    expect(clientQueryMock).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /FROM documents[\s\S]*user_id = \$1[\s\S]*created_at >= CURRENT_DATE[\s\S]*status != 'failed'/,
+      ),
+      ["user-7"],
     );
   });
 });
