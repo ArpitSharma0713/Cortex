@@ -6,6 +6,7 @@ import * as documentService from "../services/documentService.js";
 import { embedDocument } from "../services/embeddingService.js";
 import { downloadFromR2 } from "../services/storageService.js";
 import { chunkText } from "../utils/chunker.js";
+import { flagSuspiciousContent } from "../utils/contentSanitizer.js";
 import { extractTextFromBuffer } from "../utils/pdfParser.js";
 import { sanitizeText } from "../utils/sanitize.js";
 
@@ -29,16 +30,28 @@ export async function processDocumentJob(job) {
   const sanitized = sanitizeText(text);
   const chunks = chunkText(sanitized);
 
-  const chunkRecords = chunks.map((chunk) => ({
-    id: randomUUID(),
-    documentId,
-    workspaceId,
-    userId,
-    chunkIndex: chunk.chunkIndex,
-    content: chunk.content,
-    tokenCount: chunk.tokenCount,
-    pageNumber: null,
-  }));
+  const chunkRecords = chunks.map((chunk) => {
+    const flaggedPatterns = flagSuspiciousContent(chunk.content);
+
+    if (flaggedPatterns.length > 0) {
+      console.warn(
+        `Suspicious content pattern in document ${documentId}, chunk ${chunk.chunkIndex}:`,
+        flaggedPatterns,
+      );
+    }
+
+    return {
+      id: randomUUID(),
+      documentId,
+      workspaceId,
+      userId,
+      chunkIndex: chunk.chunkIndex,
+      content: chunk.content,
+      tokenCount: chunk.tokenCount,
+      pageNumber: null,
+      flaggedPatterns: flaggedPatterns.length > 0 ? flaggedPatterns : null,
+    };
+  });
 
   await withTenantContext(userId, async (client) => {
     await documentService.clearDocumentChunks(client, documentId, userId);
