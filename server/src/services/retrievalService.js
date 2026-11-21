@@ -10,8 +10,8 @@ function getCollectionName() {
 export async function retrieveRelevantChunks(question, workspaceId, userId) {
   const queryVector = await embedQuery(question);
 
-  const results = await qdrant.search(getCollectionName(), {
-    vector: queryVector,
+  const { points } = await qdrant.query(getCollectionName(), {
+    query: queryVector,
     limit: TOP_K,
     filter: {
       must: [
@@ -22,7 +22,7 @@ export async function retrieveRelevantChunks(question, workspaceId, userId) {
     with_payload: true,
   });
 
-  return results.map((result) => ({
+  return points.map((result) => ({
     chunkId: result.payload.chunk_id,
     documentId: result.payload.document_id,
     content: result.payload.content,
